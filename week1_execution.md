@@ -50,8 +50,11 @@ This installs the packages and automatically adds them to `pyproject.toml` under
 git init
 
 # Configure git for this project (local config)
-git config user.name "kirknie"
-git config user.email "kirknie@gmail.com"
+git config --local user.name "kirknie"
+git config --local user.email "kirknie@gmail.com"
+
+# Disable GPG signing for this project (optional, if you have global signing enabled)
+git config --local commit.gpgsign false
 
 # Create .gitignore
 cat > .gitignore << 'EOF'
