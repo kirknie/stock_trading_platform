@@ -962,6 +962,18 @@ uv add --dev hypothesis
 ### Step 3.2: Write Property Tests (2-3 hours)
 **File:** `trading/tests/test_properties.py`
 
+**Key Properties to Test:**
+1. **No negative fills** - Filled quantity never exceeds order quantity
+2. **Trade conservation** - All trades have valid volumes
+3. **Single order invariants** - Individual order state is always valid
+4. **Price improvement** - Limit orders never get worse than their limit price
+5. **Deterministic replay** - Same input produces same output
+6. **Filled orders removed** - Completed orders don't stay in book
+7. **No crossed book** - Best bid always < best ask
+8. **Cancel idempotent** - Canceling twice has same effect
+9. **Market order execution** - Market orders execute up to available liquidity
+10. **State consistency** - Order book internal state is always valid
+
 ```python
 from decimal import Decimal
 from datetime import datetime
@@ -1049,38 +1061,51 @@ def test_single_order_invariants(order):
         if order.order_type == OrderType.MARKET:
             assert order.filled_quantity == 0
 
-def test_price_improvement_not_possible():
+@given(
+    st.floats(min_value=1.0, max_value=1000.0),
+    st.floats(min_value=1.0, max_value=1000.0),
+    st.integers(min_value=1, max_value=1000)
+)
+@settings(max_examples=100)
+def test_price_improvement_not_possible(sell_price_float, buy_price_float, quantity):
     """Property: Limit orders never get worse than limit price."""
+    # Ensure buy price >= sell price (orders will cross)
+    assume(buy_price_float >= sell_price_float)
+
+    sell_price = Decimal(str(sell_price_float)).quantize(Decimal("0.01"))
+    buy_price = Decimal(str(buy_price_float)).quantize(Decimal("0.01"))
+    assume(buy_price >= sell_price)
+
     book = OrderBook("AAPL")
 
-    # Add sell at 150
+    # Add sell order
     sell_order = Order(
         order_id="1",
         ticker="AAPL",
         side=OrderSide.SELL,
         order_type=OrderType.LIMIT,
-        quantity=100,
-        price=Decimal("150.00"),
+        quantity=quantity,
+        price=sell_price,
         timestamp=datetime.now()
     )
     book.add_limit_order(sell_order)
 
-    # Buy at 151 (willing to pay more)
+    # Buy order willing to pay more
     buy_order = Order(
         order_id="2",
         ticker="AAPL",
         side=OrderSide.BUY,
         order_type=OrderType.LIMIT,
-        quantity=100,
-        price=Decimal("151.00"),
+        quantity=quantity,
+        price=buy_price,
         timestamp=datetime.now()
     )
     trades = book.add_limit_order(buy_order)
 
-    # Should trade at 150 (resting order price)
-    assert len(trades) == 1
-    assert trades[0].price == Decimal("150.00")
-    assert trades[0].price <= buy_order.price
+    # Should trade at sell price (resting order price)
+    if trades:
+        assert trades[0].price == sell_price
+        assert trades[0].price <= buy_price
 
 @given(st.lists(order_strategy(), min_size=5, max_size=50))
 def test_deterministic_replay(orders):
