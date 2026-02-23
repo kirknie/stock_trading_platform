@@ -1788,7 +1788,7 @@ Make executable:
 ```bash
 mkdir examples
 chmod +x examples/basic_usage.py
-python examples/basic_usage.py
+PYTHONPATH=. python examples/basic_usage.py
 ```
 
 ---
@@ -1906,7 +1906,8 @@ find trading/tests/ -name "*.py" | xargs wc -l
 
 ## Resume Bullet (Draft)
 
-"Built deterministic multi-ticker matching engine in Python supporting limit/market orders with price-time priority, achieving 100% test coverage with property-based testing (Hypothesis) and proving key invariants (no negative fills, deterministic replay, volume conservation)."
+```
+Built deterministic multi-ticker matching engine in Python supporting limit/market orders with price-time priority, achieving 100% test coverage with property-based testing (Hypothesis) and proving key invariants (no negative fills, deterministic replay, volume conservation)."
 ```
 
 ---
@@ -1970,7 +1971,7 @@ pytest -v
 python -m py_compile trading/**/*.py
 
 # Examples run successfully
-python examples/basic_usage.py
+PYTHONPATH=. python examples/basic_usage.py
 ```
 
 ### Metrics to Record:
