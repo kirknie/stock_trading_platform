@@ -27,7 +27,7 @@ def test_full_trading_scenario():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = engine.submit_order(sell_aapl)
     assert len(trades) == 0
@@ -46,7 +46,7 @@ def test_full_trading_scenario():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = engine.submit_order(buy_aapl)
 
@@ -74,7 +74,7 @@ def test_cross_ticker_independence():
             order_type=OrderType.LIMIT,
             quantity=100,
             price=Decimal("150.00") + Decimal(i),
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         engine.submit_order(order)
 
@@ -97,7 +97,7 @@ def test_cancel_across_tickers():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     engine.submit_order(order_aapl)
 
@@ -108,7 +108,7 @@ def test_cancel_across_tickers():
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("300.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     engine.submit_order(order_msft)
 
@@ -129,11 +129,7 @@ def test_market_order_across_multiple_tickers():
     engine = MatchingEngine(["AAPL", "MSFT", "GOOGL"])
 
     # Set up sell orders in each ticker
-    tickers_prices = [
-        ("AAPL", "150.00"),
-        ("MSFT", "300.00"),
-        ("GOOGL", "2500.00")
-    ]
+    tickers_prices = [("AAPL", "150.00"), ("MSFT", "300.00"), ("GOOGL", "2500.00")]
 
     for ticker, price in tickers_prices:
         sell = Order(
@@ -143,7 +139,7 @@ def test_market_order_across_multiple_tickers():
             order_type=OrderType.LIMIT,
             quantity=100,
             price=Decimal(price),
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         engine.submit_order(sell)
 
@@ -156,7 +152,7 @@ def test_market_order_across_multiple_tickers():
             order_type=OrderType.MARKET,
             quantity=100,
             price=None,
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         trades = engine.submit_order(buy)
 
@@ -177,7 +173,7 @@ def test_order_registry_cleanup():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     engine.submit_order(sell)
 
@@ -191,7 +187,7 @@ def test_order_registry_cleanup():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     engine.submit_order(buy)
 
@@ -212,7 +208,7 @@ def test_cancel_removes_from_registry():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     engine.submit_order(order)
 
@@ -244,7 +240,7 @@ def test_multiple_partial_fills():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     engine.submit_order(sell)
 
@@ -258,7 +254,7 @@ def test_multiple_partial_fills():
             order_type=OrderType.LIMIT,
             quantity=10,
             price=Decimal("150.00"),
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         trades = engine.submit_order(buy)
         assert len(trades) == 1
@@ -278,7 +274,7 @@ def test_five_ticker_simultaneous_trading():
         ("MSFT", "300.00"),
         ("GOOGL", "2500.00"),
         ("TSLA", "200.00"),
-        ("NVDA", "500.00")
+        ("NVDA", "500.00"),
     ]
 
     # Add sell orders for all tickers
@@ -290,7 +286,7 @@ def test_five_ticker_simultaneous_trading():
             order_type=OrderType.LIMIT,
             quantity=100,
             price=Decimal(price),
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         engine.submit_order(sell)
 
@@ -309,7 +305,7 @@ def test_five_ticker_simultaneous_trading():
             order_type=OrderType.LIMIT,
             quantity=100,
             price=Decimal(price),
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         trades = engine.submit_order(buy)
         assert len(trades) == 1
@@ -328,11 +324,43 @@ def test_complex_order_flow():
     # Initial market setup
     orders = [
         # Sells
-        Order("S1", "AAPL", OrderSide.SELL, OrderType.LIMIT, 50, Decimal("151.00"), datetime.now()),
-        Order("S2", "AAPL", OrderSide.SELL, OrderType.LIMIT, 100, Decimal("152.00"), datetime.now()),
+        Order(
+            "S1",
+            "AAPL",
+            OrderSide.SELL,
+            OrderType.LIMIT,
+            50,
+            Decimal("151.00"),
+            datetime.now(),
+        ),
+        Order(
+            "S2",
+            "AAPL",
+            OrderSide.SELL,
+            OrderType.LIMIT,
+            100,
+            Decimal("152.00"),
+            datetime.now(),
+        ),
         # Buys
-        Order("B1", "AAPL", OrderSide.BUY, OrderType.LIMIT, 50, Decimal("149.00"), datetime.now()),
-        Order("B2", "AAPL", OrderSide.BUY, OrderType.LIMIT, 100, Decimal("148.00"), datetime.now()),
+        Order(
+            "B1",
+            "AAPL",
+            OrderSide.BUY,
+            OrderType.LIMIT,
+            50,
+            Decimal("149.00"),
+            datetime.now(),
+        ),
+        Order(
+            "B2",
+            "AAPL",
+            OrderSide.BUY,
+            OrderType.LIMIT,
+            100,
+            Decimal("148.00"),
+            datetime.now(),
+        ),
     ]
 
     for order in orders:
@@ -352,7 +380,7 @@ def test_complex_order_flow():
         order_type=OrderType.LIMIT,
         quantity=75,
         price=Decimal("152.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = engine.submit_order(aggressive_buy)
 
@@ -375,7 +403,7 @@ def test_order_submission_error_handling():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
     try:
@@ -408,7 +436,7 @@ def test_end_to_end_lifecycle():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = engine.submit_order(order1)
     assert len(trades) == 0
@@ -422,7 +450,7 @@ def test_end_to_end_lifecycle():
         order_type=OrderType.LIMIT,
         quantity=30,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = engine.submit_order(order2)
     assert len(trades) == 1

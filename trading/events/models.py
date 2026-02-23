@@ -14,18 +14,21 @@ from typing import Optional
 
 class OrderSide(Enum):
     """Side of the order: buy or sell."""
+
     BUY = "BUY"
     SELL = "SELL"
 
 
 class OrderType(Enum):
     """Type of order: limit (price specified) or market (immediate execution)."""
+
     LIMIT = "LIMIT"
     MARKET = "MARKET"
 
 
 class OrderStatus(Enum):
     """Current status of an order in its lifecycle."""
+
     NEW = "NEW"
     PARTIALLY_FILLED = "PARTIALLY_FILLED"
     FILLED = "FILLED"
@@ -50,6 +53,7 @@ class Order:
         filled_quantity: How many shares have been filled
         account_id: Account that placed the order
     """
+
     order_id: str
     ticker: str
     side: OrderSide
@@ -70,7 +74,7 @@ class Order:
         return self.status in (
             OrderStatus.FILLED,
             OrderStatus.CANCELED,
-            OrderStatus.REJECTED
+            OrderStatus.REJECTED,
         )
 
 
@@ -88,6 +92,7 @@ class Trade:
         quantity: Number of shares traded
         timestamp: When the trade occurred
     """
+
     trade_id: str
     ticker: str
     buyer_order_id: str

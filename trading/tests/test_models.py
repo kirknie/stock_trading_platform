@@ -18,7 +18,7 @@ def test_order_creation():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     assert order.order_id == "1"
     assert order.ticker == "AAPL"
@@ -41,7 +41,7 @@ def test_order_partial_fill():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     order.filled_quantity = 30
     order.status = OrderStatus.PARTIALLY_FILLED
@@ -60,7 +60,7 @@ def test_order_complete_fill():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     order.filled_quantity = 100
     order.status = OrderStatus.FILLED
@@ -78,7 +78,7 @@ def test_market_order_no_price():
         order_type=OrderType.MARKET,
         quantity=100,
         price=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     assert order.price is None
     assert order.order_type == OrderType.MARKET
@@ -93,7 +93,7 @@ def test_order_canceled():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     order.status = OrderStatus.CANCELED
 
@@ -109,7 +109,7 @@ def test_order_rejected():
         order_type=OrderType.MARKET,
         quantity=100,
         price=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     order.status = OrderStatus.REJECTED
 
@@ -125,7 +125,7 @@ def test_sell_order_creation():
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("300.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     assert order.side == OrderSide.SELL
     assert order.ticker == "MSFT"
@@ -140,7 +140,7 @@ def test_trade_creation():
         seller_order_id="S1",
         price=Decimal("150.00"),
         quantity=100,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     assert trade.trade_id == "T1"
     assert trade.ticker == "AAPL"
@@ -160,7 +160,7 @@ def test_order_with_custom_account():
         quantity=100,
         price=Decimal("150.00"),
         timestamp=datetime.now(),
-        account_id="ACC123"
+        account_id="ACC123",
     )
     assert order.account_id == "ACC123"
 
@@ -174,6 +174,6 @@ def test_order_default_account():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     assert order.account_id == "default"

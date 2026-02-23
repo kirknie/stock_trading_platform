@@ -80,6 +80,7 @@ class OrderBook:
 
             # Price check for limit orders
             if buy_order.order_type == OrderType.LIMIT:
+                assert buy_order.price is not None
                 if buy_order.price < best_ask_price:
                     break
 
@@ -91,8 +92,7 @@ class OrderBook:
 
                 # Calculate trade quantity
                 trade_qty = min(
-                    buy_order.remaining_quantity(),
-                    sell_order.remaining_quantity()
+                    buy_order.remaining_quantity(), sell_order.remaining_quantity()
                 )
 
                 # Create trade
@@ -103,7 +103,7 @@ class OrderBook:
                     seller_order_id=sell_order.order_id,
                     price=best_ask_price,  # Trade at resting order price
                     quantity=trade_qty,
-                    timestamp=datetime.now()
+                    timestamp=datetime.now(),
                 )
                 trades.append(trade)
                 self._trade_counter += 1
@@ -139,6 +139,7 @@ class OrderBook:
 
             # Price check for limit orders
             if sell_order.order_type == OrderType.LIMIT:
+                assert sell_order.price is not None
                 if sell_order.price > best_bid_price:
                     break
 
@@ -150,8 +151,7 @@ class OrderBook:
 
                 # Calculate trade quantity
                 trade_qty = min(
-                    sell_order.remaining_quantity(),
-                    buy_order.remaining_quantity()
+                    sell_order.remaining_quantity(), buy_order.remaining_quantity()
                 )
 
                 # Create trade
@@ -162,7 +162,7 @@ class OrderBook:
                     seller_order_id=sell_order.order_id,
                     price=best_bid_price,  # Trade at resting order price
                     quantity=trade_qty,
-                    timestamp=datetime.now()
+                    timestamp=datetime.now(),
                 )
                 trades.append(trade)
                 self._trade_counter += 1

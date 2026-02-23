@@ -7,10 +7,9 @@ and market data retrieval across multiple tickers.
 This is the main entry point for the trading system.
 """
 
-from typing import List, Optional, Dict
+from typing import List, Dict
 from trading.engine.order_book_manager import OrderBookManager
 from trading.events.models import Order, Trade
-from decimal import Decimal
 
 
 class MatchingEngine:
@@ -24,7 +23,9 @@ class MatchingEngine:
             tickers: List of ticker symbols to support (e.g., ['AAPL', 'MSFT', 'GOOGL'])
         """
         self.manager = OrderBookManager(tickers)
-        self.order_registry: Dict[str, tuple[str, Order]] = {}  # order_id -> (ticker, order)
+        self.order_registry: Dict[str, tuple[str, Order]] = (
+            {}
+        )  # order_id -> (ticker, order)
 
     def submit_order(self, order: Order) -> List[Trade]:
         """
@@ -87,7 +88,7 @@ class MatchingEngine:
             "ticker": ticker,
             "best_bid": book.get_best_bid(),
             "best_ask": book.get_best_ask(),
-            "spread": book.get_spread()
+            "spread": book.get_spread(),
         }
 
     def get_supported_tickers(self) -> List[str]:

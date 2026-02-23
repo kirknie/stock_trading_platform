@@ -33,7 +33,7 @@ def test_submit_order_to_correct_book():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = manager.submit_order(order_aapl)
 
@@ -53,7 +53,7 @@ def test_submit_to_unsupported_ticker():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
     with pytest.raises(ValueError, match="not supported"):
@@ -72,7 +72,7 @@ def test_multi_ticker_matching():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     manager.submit_order(sell_aapl)
 
@@ -83,7 +83,7 @@ def test_multi_ticker_matching():
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("300.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     manager.submit_order(sell_msft)
 
@@ -95,7 +95,7 @@ def test_multi_ticker_matching():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades_aapl = manager.submit_order(buy_aapl)
 
@@ -107,7 +107,7 @@ def test_multi_ticker_matching():
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("300.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades_msft = manager.submit_order(buy_msft)
 
@@ -128,7 +128,7 @@ def test_cancel_in_correct_book():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     manager.submit_order(order)
 
@@ -153,7 +153,7 @@ def test_order_isolation_between_tickers():
             order_type=OrderType.LIMIT,
             quantity=100,
             price=Decimal("150.00") + Decimal(i),
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         manager.submit_order(order)
 
@@ -175,7 +175,7 @@ def test_market_order_routing():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     manager.submit_order(sell)
 
@@ -187,7 +187,7 @@ def test_market_order_routing():
         order_type=OrderType.MARKET,
         quantity=100,
         price=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = manager.submit_order(market_buy)
 
@@ -223,7 +223,7 @@ def test_same_order_id_different_tickers():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
     order2 = Order(
@@ -233,7 +233,7 @@ def test_same_order_id_different_tickers():
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("300.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
     manager.submit_order(order1)
@@ -254,7 +254,7 @@ def test_multiple_tickers_simultaneous():
         ("MSFT", "300.00"),
         ("GOOGL", "2500.00"),
         ("TSLA", "200.00"),
-        ("NVDA", "500.00")
+        ("NVDA", "500.00"),
     ]
 
     for ticker, price in tickers_prices:
@@ -265,7 +265,7 @@ def test_multiple_tickers_simultaneous():
             order_type=OrderType.LIMIT,
             quantity=100,
             price=Decimal(price),
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         manager.submit_order(order)
 
@@ -294,7 +294,7 @@ def test_unknown_order_type():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     # Simulate an unknown order type by modifying it
     # (In practice this shouldn't happen, but test the error handling)
@@ -310,28 +310,44 @@ def test_partial_fill_across_tickers():
 
     # Large sell orders in both tickers
     sell_aapl = Order(
-        order_id="SA1", ticker="AAPL", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=100, price=Decimal("150.00"),
-        timestamp=datetime.now()
+        order_id="SA1",
+        ticker="AAPL",
+        side=OrderSide.SELL,
+        order_type=OrderType.LIMIT,
+        quantity=100,
+        price=Decimal("150.00"),
+        timestamp=datetime.now(),
     )
     sell_msft = Order(
-        order_id="SM1", ticker="MSFT", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=100, price=Decimal("300.00"),
-        timestamp=datetime.now()
+        order_id="SM1",
+        ticker="MSFT",
+        side=OrderSide.SELL,
+        order_type=OrderType.LIMIT,
+        quantity=100,
+        price=Decimal("300.00"),
+        timestamp=datetime.now(),
     )
     manager.submit_order(sell_aapl)
     manager.submit_order(sell_msft)
 
     # Small buy orders (partial fills)
     buy_aapl = Order(
-        order_id="BA1", ticker="AAPL", side=OrderSide.BUY,
-        order_type=OrderType.LIMIT, quantity=30, price=Decimal("150.00"),
-        timestamp=datetime.now()
+        order_id="BA1",
+        ticker="AAPL",
+        side=OrderSide.BUY,
+        order_type=OrderType.LIMIT,
+        quantity=30,
+        price=Decimal("150.00"),
+        timestamp=datetime.now(),
     )
     buy_msft = Order(
-        order_id="BM1", ticker="MSFT", side=OrderSide.BUY,
-        order_type=OrderType.LIMIT, quantity=40, price=Decimal("300.00"),
-        timestamp=datetime.now()
+        order_id="BM1",
+        ticker="MSFT",
+        side=OrderSide.BUY,
+        order_type=OrderType.LIMIT,
+        quantity=40,
+        price=Decimal("300.00"),
+        timestamp=datetime.now(),
     )
 
     trades_aapl = manager.submit_order(buy_aapl)

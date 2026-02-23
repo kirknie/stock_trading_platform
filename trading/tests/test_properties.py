@@ -28,7 +28,13 @@ def order_strategy(draw, ticker="AAPL", order_type=OrderType.LIMIT):
     else:
         price = None
 
-    order_id = draw(st.text(min_size=1, max_size=10, alphabet=st.characters(min_codepoint=48, max_codepoint=122)))
+    order_id = draw(
+        st.text(
+            min_size=1,
+            max_size=10,
+            alphabet=st.characters(min_codepoint=48, max_codepoint=122),
+        )
+    )
 
     return Order(
         order_id=order_id,
@@ -37,7 +43,7 @@ def order_strategy(draw, ticker="AAPL", order_type=OrderType.LIMIT):
         order_type=order_type,
         quantity=quantity,
         price=price,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
 
@@ -74,8 +80,14 @@ def test_trade_conservation(orders):
 
     total_volume = sum(t.quantity for t in all_trades)
 
-    # Every trade has a buyer and seller, so volumes must match
-    # (This is implicitly true, but we verify no double-counting)
+    # Every trade fills a buyer and seller by the same quantity.
+    # So total trade volume must equal total filled quantity on each side.
+    buy_filled = sum(o.filled_quantity for o in orders if o.side == OrderSide.BUY)
+    sell_filled = sum(o.filled_quantity for o in orders if o.side == OrderSide.SELL)
+
+    assert total_volume == buy_filled
+    assert total_volume == sell_filled
+
     for trade in all_trades:
         assert trade.quantity > 0
 
@@ -90,6 +102,12 @@ def test_single_order_invariants(order):
         trades = book.add_limit_order(order)
     else:
         trades = book.execute_market_order(order)
+
+    # Trades should only exist if the order was at least partially filled
+    if trades:
+        assert order.filled_quantity > 0
+    else:
+        assert order.filled_quantity == 0 or order.status == OrderStatus.REJECTED
 
     # Invariants
     assert order.filled_quantity <= order.quantity
@@ -106,7 +124,7 @@ def test_single_order_invariants(order):
 @given(
     st.floats(min_value=1.0, max_value=1000.0),
     st.floats(min_value=1.0, max_value=1000.0),
-    st.integers(min_value=1, max_value=1000)
+    st.integers(min_value=1, max_value=1000),
 )
 @settings(max_examples=100)
 def test_price_improvement_not_possible(sell_price_float, buy_price_float, quantity):
@@ -128,7 +146,7 @@ def test_price_improvement_not_possible(sell_price_float, buy_price_float, quant
         order_type=OrderType.LIMIT,
         quantity=quantity,
         price=sell_price,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell_order)
 
@@ -140,7 +158,7 @@ def test_price_improvement_not_possible(sell_price_float, buy_price_float, quant
         order_type=OrderType.LIMIT,
         quantity=quantity,
         price=buy_price,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(buy_order)
 
@@ -167,7 +185,7 @@ def test_deterministic_replay(orders):
             order_type=order.order_type,
             quantity=order.quantity,
             price=order.price,
-            timestamp=order.timestamp
+            timestamp=order.timestamp,
         )
         if order_copy1.order_type == OrderType.LIMIT:
             t = book1.add_limit_order(order_copy1)
@@ -186,7 +204,7 @@ def test_deterministic_replay(orders):
             order_type=order.order_type,
             quantity=order.quantity,
             price=order.price,
-            timestamp=order.timestamp
+            timestamp=order.timestamp,
         )
         if order_copy2.order_type == OrderType.LIMIT:
             t = book2.add_limit_order(order_copy2)
@@ -213,6 +231,17 @@ def test_filled_orders_removed_from_book(orders):
     # Count orders still in book
     total_bid_orders = sum(len(queue) for queue in book.bids.values())
     total_ask_orders = sum(len(queue) for queue in book.asks.values())
+
+    # Counts must match the number of non-filled orders on each side
+    open_bids = sum(
+        1 for o in orders if o.side == OrderSide.BUY and not o.is_complete()
+    )
+    open_asks = sum(
+        1 for o in orders if o.side == OrderSide.SELL and not o.is_complete()
+    )
+
+    assert total_bid_orders == open_bids
+    assert total_ask_orders == open_asks
 
     # Check that all orders in book are not fully filled
     for queue in book.bids.values():
@@ -242,8 +271,21 @@ def test_best_bid_ask_consistency(orders):
 
 
 @given(
-    st.lists(order_strategy(order_type=OrderType.LIMIT), min_size=1, max_size=20, unique_by=lambda o: o.order_id),
-    st.lists(st.text(min_size=1, max_size=10, alphabet=st.characters(min_codepoint=48, max_codepoint=122)), min_size=0, max_size=5)
+    st.lists(
+        order_strategy(order_type=OrderType.LIMIT),
+        min_size=1,
+        max_size=20,
+        unique_by=lambda o: o.order_id,
+    ),
+    st.lists(
+        st.text(
+            min_size=1,
+            max_size=10,
+            alphabet=st.characters(min_codepoint=48, max_codepoint=122),
+        ),
+        min_size=0,
+        max_size=5,
+    ),
 )
 @settings(max_examples=50)
 def test_cancel_idempotent(orders, cancel_ids):
@@ -278,7 +320,7 @@ def test_market_order_execution_quantity(quantity):
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell)
 
@@ -290,7 +332,7 @@ def test_market_order_execution_quantity(quantity):
         order_type=OrderType.MARKET,
         quantity=quantity,
         price=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.execute_market_order(buy)
 

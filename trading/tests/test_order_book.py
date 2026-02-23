@@ -30,7 +30,7 @@ def test_add_single_limit_buy():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(order)
 
@@ -49,7 +49,7 @@ def test_add_single_limit_sell():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("151.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(order)
 
@@ -70,7 +70,7 @@ def test_immediate_full_match():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell_order)
 
@@ -82,7 +82,7 @@ def test_immediate_full_match():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(buy_order)
 
@@ -106,7 +106,7 @@ def test_partial_fill():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell_order)
 
@@ -118,7 +118,7 @@ def test_partial_fill():
         order_type=OrderType.LIMIT,
         quantity=30,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(buy_order)
 
@@ -141,7 +141,7 @@ def test_price_time_priority():
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     order2 = Order(
         order_id="2",
@@ -150,7 +150,7 @@ def test_price_time_priority():
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(order1)
     book.add_limit_order(order2)
@@ -163,7 +163,7 @@ def test_price_time_priority():
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(sell_order)
 
@@ -186,7 +186,7 @@ def test_market_order_buy():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell_order)
 
@@ -198,7 +198,7 @@ def test_market_order_buy():
         order_type=OrderType.MARKET,
         quantity=100,
         price=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.execute_market_order(market_order)
 
@@ -219,7 +219,7 @@ def test_market_order_no_liquidity():
         order_type=OrderType.MARKET,
         quantity=100,
         price=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.execute_market_order(market_order)
 
@@ -238,7 +238,7 @@ def test_cancel_order():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(order)
 
@@ -260,28 +260,52 @@ def test_multiple_price_levels():
     book = OrderBook("AAPL")
 
     # Add bids at different prices
-    book.add_limit_order(Order(
-        order_id="B1", ticker="AAPL", side=OrderSide.BUY,
-        order_type=OrderType.LIMIT, quantity=100, price=Decimal("150.00"),
-        timestamp=datetime.now()
-    ))
-    book.add_limit_order(Order(
-        order_id="B2", ticker="AAPL", side=OrderSide.BUY,
-        order_type=OrderType.LIMIT, quantity=100, price=Decimal("149.00"),
-        timestamp=datetime.now()
-    ))
+    book.add_limit_order(
+        Order(
+            order_id="B1",
+            ticker="AAPL",
+            side=OrderSide.BUY,
+            order_type=OrderType.LIMIT,
+            quantity=100,
+            price=Decimal("150.00"),
+            timestamp=datetime.now(),
+        )
+    )
+    book.add_limit_order(
+        Order(
+            order_id="B2",
+            ticker="AAPL",
+            side=OrderSide.BUY,
+            order_type=OrderType.LIMIT,
+            quantity=100,
+            price=Decimal("149.00"),
+            timestamp=datetime.now(),
+        )
+    )
 
     # Add asks at different prices
-    book.add_limit_order(Order(
-        order_id="S1", ticker="AAPL", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=100, price=Decimal("151.00"),
-        timestamp=datetime.now()
-    ))
-    book.add_limit_order(Order(
-        order_id="S2", ticker="AAPL", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=100, price=Decimal("152.00"),
-        timestamp=datetime.now()
-    ))
+    book.add_limit_order(
+        Order(
+            order_id="S1",
+            ticker="AAPL",
+            side=OrderSide.SELL,
+            order_type=OrderType.LIMIT,
+            quantity=100,
+            price=Decimal("151.00"),
+            timestamp=datetime.now(),
+        )
+    )
+    book.add_limit_order(
+        Order(
+            order_id="S2",
+            ticker="AAPL",
+            side=OrderSide.SELL,
+            order_type=OrderType.LIMIT,
+            quantity=100,
+            price=Decimal("152.00"),
+            timestamp=datetime.now(),
+        )
+    )
 
     assert book.get_best_bid() == Decimal("150.00")
     assert book.get_best_ask() == Decimal("151.00")
@@ -294,23 +318,35 @@ def test_price_priority():
 
     # Add two sell orders at different prices
     sell_low = Order(
-        order_id="S1", ticker="AAPL", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=50, price=Decimal("150.00"),
-        timestamp=datetime.now()
+        order_id="S1",
+        ticker="AAPL",
+        side=OrderSide.SELL,
+        order_type=OrderType.LIMIT,
+        quantity=50,
+        price=Decimal("150.00"),
+        timestamp=datetime.now(),
     )
     sell_high = Order(
-        order_id="S2", ticker="AAPL", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=50, price=Decimal("151.00"),
-        timestamp=datetime.now()
+        order_id="S2",
+        ticker="AAPL",
+        side=OrderSide.SELL,
+        order_type=OrderType.LIMIT,
+        quantity=50,
+        price=Decimal("151.00"),
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell_high)  # Add higher price first
-    book.add_limit_order(sell_low)   # Add lower price second
+    book.add_limit_order(sell_low)  # Add lower price second
 
     # Market buy should match lower price first
     buy = Order(
-        order_id="B1", ticker="AAPL", side=OrderSide.BUY,
-        order_type=OrderType.MARKET, quantity=50, price=None,
-        timestamp=datetime.now()
+        order_id="B1",
+        ticker="AAPL",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        quantity=50,
+        price=None,
+        timestamp=datetime.now(),
     )
     trades = book.execute_market_order(buy)
 
@@ -325,17 +361,25 @@ def test_limit_order_no_match_due_to_price():
 
     # Add sell at 151
     sell = Order(
-        order_id="S1", ticker="AAPL", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=100, price=Decimal("151.00"),
-        timestamp=datetime.now()
+        order_id="S1",
+        ticker="AAPL",
+        side=OrderSide.SELL,
+        order_type=OrderType.LIMIT,
+        quantity=100,
+        price=Decimal("151.00"),
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell)
 
     # Buy at 150 (doesn't cross)
     buy = Order(
-        order_id="B1", ticker="AAPL", side=OrderSide.BUY,
-        order_type=OrderType.LIMIT, quantity=100, price=Decimal("150.00"),
-        timestamp=datetime.now()
+        order_id="B1",
+        ticker="AAPL",
+        side=OrderSide.BUY,
+        order_type=OrderType.LIMIT,
+        quantity=100,
+        price=Decimal("150.00"),
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(buy)
 
@@ -350,17 +394,25 @@ def test_aggressive_limit_order():
 
     # Add sell at 150
     sell = Order(
-        order_id="S1", ticker="AAPL", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=100, price=Decimal("150.00"),
-        timestamp=datetime.now()
+        order_id="S1",
+        ticker="AAPL",
+        side=OrderSide.SELL,
+        order_type=OrderType.LIMIT,
+        quantity=100,
+        price=Decimal("150.00"),
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell)
 
     # Buy at 151 (crosses spread, should match at 150)
     buy = Order(
-        order_id="B1", ticker="AAPL", side=OrderSide.BUY,
-        order_type=OrderType.LIMIT, quantity=100, price=Decimal("151.00"),
-        timestamp=datetime.now()
+        order_id="B1",
+        ticker="AAPL",
+        side=OrderSide.BUY,
+        order_type=OrderType.LIMIT,
+        quantity=100,
+        price=Decimal("151.00"),
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(buy)
 
@@ -374,17 +426,25 @@ def test_partial_market_order():
 
     # Add small sell order
     sell = Order(
-        order_id="S1", ticker="AAPL", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=50, price=Decimal("150.00"),
-        timestamp=datetime.now()
+        order_id="S1",
+        ticker="AAPL",
+        side=OrderSide.SELL,
+        order_type=OrderType.LIMIT,
+        quantity=50,
+        price=Decimal("150.00"),
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell)
 
     # Large market buy
     buy = Order(
-        order_id="B1", ticker="AAPL", side=OrderSide.BUY,
-        order_type=OrderType.MARKET, quantity=100, price=None,
-        timestamp=datetime.now()
+        order_id="B1",
+        ticker="AAPL",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        quantity=100,
+        price=None,
+        timestamp=datetime.now(),
     )
     trades = book.execute_market_order(buy)
 
@@ -400,22 +460,38 @@ def test_sweep_multiple_levels():
     book = OrderBook("AAPL")
 
     # Add multiple sell levels
-    book.add_limit_order(Order(
-        order_id="S1", ticker="AAPL", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=50, price=Decimal("150.00"),
-        timestamp=datetime.now()
-    ))
-    book.add_limit_order(Order(
-        order_id="S2", ticker="AAPL", side=OrderSide.SELL,
-        order_type=OrderType.LIMIT, quantity=50, price=Decimal("151.00"),
-        timestamp=datetime.now()
-    ))
+    book.add_limit_order(
+        Order(
+            order_id="S1",
+            ticker="AAPL",
+            side=OrderSide.SELL,
+            order_type=OrderType.LIMIT,
+            quantity=50,
+            price=Decimal("150.00"),
+            timestamp=datetime.now(),
+        )
+    )
+    book.add_limit_order(
+        Order(
+            order_id="S2",
+            ticker="AAPL",
+            side=OrderSide.SELL,
+            order_type=OrderType.LIMIT,
+            quantity=50,
+            price=Decimal("151.00"),
+            timestamp=datetime.now(),
+        )
+    )
 
     # Large buy order that sweeps both levels
     buy = Order(
-        order_id="B1", ticker="AAPL", side=OrderSide.BUY,
-        order_type=OrderType.MARKET, quantity=100, price=None,
-        timestamp=datetime.now()
+        order_id="B1",
+        ticker="AAPL",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        quantity=100,
+        price=None,
+        timestamp=datetime.now(),
     )
     trades = book.execute_market_order(buy)
 

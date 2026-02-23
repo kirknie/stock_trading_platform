@@ -23,7 +23,7 @@ def test_zero_quantity_order():
         order_type=OrderType.LIMIT,
         quantity=0,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
     # Should not add to book or generate trades
@@ -44,7 +44,7 @@ def test_very_large_orders():
         order_type=OrderType.LIMIT,
         quantity=large_qty,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell)
 
@@ -55,7 +55,7 @@ def test_very_large_orders():
         order_type=OrderType.MARKET,
         quantity=large_qty,
         price=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.execute_market_order(buy)
 
@@ -76,7 +76,7 @@ def test_many_price_levels():
             order_type=OrderType.LIMIT,
             quantity=10,
             price=Decimal(str(100 + i)),
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         book.add_limit_order(order)
 
@@ -95,7 +95,7 @@ def test_same_order_id_different_tickers():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
     order2 = Order(
@@ -105,7 +105,7 @@ def test_same_order_id_different_tickers():
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("300.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
 
     manager.submit_order(order1)
@@ -127,7 +127,7 @@ def test_rapid_order_cancellation():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(order)
 
@@ -149,7 +149,7 @@ def test_partial_fill_then_cancel():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(large_sell)
 
@@ -161,7 +161,7 @@ def test_partial_fill_then_cancel():
         order_type=OrderType.LIMIT,
         quantity=30,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(small_buy)
 
@@ -187,7 +187,7 @@ def test_very_small_price():
         order_type=OrderType.LIMIT,
         quantity=1000,
         price=Decimal("0.01"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(order)
 
@@ -206,7 +206,7 @@ def test_very_large_price():
         order_type=OrderType.LIMIT,
         quantity=1,
         price=Decimal("999999.99"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(order)
 
@@ -227,7 +227,7 @@ def test_many_orders_same_price():
             order_type=OrderType.LIMIT,
             quantity=1,
             price=Decimal("150.00"),
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         book.add_limit_order(order)
 
@@ -248,7 +248,7 @@ def test_alternating_buys_sells():
                 order_type=OrderType.LIMIT,
                 quantity=10,
                 price=Decimal("149.00"),
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
         else:
             order = Order(
@@ -258,7 +258,7 @@ def test_alternating_buys_sells():
                 order_type=OrderType.LIMIT,
                 quantity=10,
                 price=Decimal("151.00"),
-                timestamp=datetime.now()
+                timestamp=datetime.now(),
             )
         book.add_limit_order(order)
 
@@ -280,7 +280,7 @@ def test_cancel_all_orders_at_price_level():
             order_type=OrderType.LIMIT,
             quantity=10,
             price=Decimal("150.00"),
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
         book.add_limit_order(order)
 
@@ -305,7 +305,7 @@ def test_market_order_partial_liquidity():
         order_type=OrderType.LIMIT,
         quantity=50,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell)
 
@@ -317,7 +317,7 @@ def test_market_order_partial_liquidity():
         order_type=OrderType.MARKET,
         quantity=100,
         price=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.execute_market_order(buy)
 
@@ -339,7 +339,7 @@ def test_exact_price_match():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell)
 
@@ -350,7 +350,7 @@ def test_exact_price_match():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.add_limit_order(buy)
 
@@ -376,7 +376,7 @@ def test_one_sided_book_spread():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(buy)
     assert book.get_spread() is None
@@ -390,7 +390,7 @@ def test_one_sided_book_spread():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("300.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book2.add_limit_order(sell)
     assert book2.get_spread() is None
@@ -407,7 +407,7 @@ def test_decimal_precision():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.123"),  # 3 decimal places
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(order)
 
@@ -425,7 +425,7 @@ def test_order_with_single_share():
         order_type=OrderType.LIMIT,
         quantity=1,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell)
 
@@ -436,7 +436,7 @@ def test_order_with_single_share():
         order_type=OrderType.MARKET,
         quantity=1,
         price=None,
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     trades = book.execute_market_order(buy)
 
@@ -456,7 +456,7 @@ def test_wide_spread():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("100.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(buy)
 
@@ -467,7 +467,7 @@ def test_wide_spread():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("200.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell)
 
@@ -485,7 +485,7 @@ def test_tight_spread():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.00"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(buy)
 
@@ -496,7 +496,7 @@ def test_tight_spread():
         order_type=OrderType.LIMIT,
         quantity=100,
         price=Decimal("150.01"),
-        timestamp=datetime.now()
+        timestamp=datetime.now(),
     )
     book.add_limit_order(sell)
 
