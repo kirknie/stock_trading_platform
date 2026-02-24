@@ -10,6 +10,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "asgi-lifespan>=2.1.0",
     "black>=26.1.0",
     "httpx>=0.28.1",
     "hypothesis>=6.151.6",

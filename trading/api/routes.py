@@ -90,7 +90,7 @@ async def submit_order(
     """
     if request.ticker not in engine.get_supported_tickers():
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Ticker '{request.ticker}' is not supported. "
                    f"Supported: {engine.get_supported_tickers()}",
         )
