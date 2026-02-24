@@ -229,10 +229,58 @@ def init_app_state() -> tuple[MatchingEngine, asyncio.Queue]:
 
 ---
 
-### Step 1.3: Wire Up the FastAPI App (45 min)
+### Step 1.3: Wire Up a Minimal FastAPI App (45 min)
 **File:** `main.py`
 
-Replace the placeholder `main.py` with a full FastAPI application.
+Replace the placeholder `main.py` with a minimal FastAPI application. We do **not** import `trading.api.consumer` or `trading.api.routes` yet — those files don't exist until Day 2 and would cause an `ImportError`. The full lifespan with the consumer will be wired in Step 2.0.
+
+```python
+"""
+Stock Trading Platform — FastAPI entry point.
+
+Architecture:
+  HTTP Request → OrderRequest (Pydantic) → asyncio.Queue → Consumer Worker
+  → MatchingEngine → List[Trade] → OrderResponse (Pydantic) → HTTP Response
+
+The asyncio.Queue decouples HTTP ingestion from matching, enabling
+future horizontal scaling of the consumer workers.
+"""
+
+from fastapi import FastAPI
+
+app = FastAPI(
+    title="Stock Trading Platform",
+    version="0.2.0",
+)
+```
+
+**Validation:**
+```bash
+python -c "from main import app; print('App OK')"
+```
+
+---
+
+### Day 1 Checklist
+- [ ] `trading/api/schemas.py` created with all request/response schemas
+- [ ] `trading/api/dependencies.py` created with engine + queue singletons
+- [ ] `main.py` created as minimal FastAPI app (no consumer yet)
+- [ ] All imports resolve without errors
+- [ ] No failing tests (run `pytest -v`)
+
+---
+
+## Day 2: REST Routes & Async Consumer (4-5 hours)
+
+### Goal
+Implement all REST endpoints and the background consumer that processes orders from the queue.
+
+---
+
+### Step 2.0: Complete main.py with Lifespan (15 min)
+**File:** `main.py`
+
+Now that the consumer will exist, update `main.py` to add the full lifespan, consumer task, and router registration.
 
 ```python
 """
@@ -287,26 +335,9 @@ app.include_router(router)
 app.include_router(ws_router)
 ```
 
-**Validation:**
-```bash
-python -c "from main import app; print('App OK')"
-```
-
----
-
-### Day 1 Checklist
-- [ ] `trading/api/schemas.py` created with all request/response schemas
-- [ ] `trading/api/dependencies.py` created with engine + queue singletons
-- [ ] `main.py` updated with lifespan and router registration
-- [ ] All imports resolve without errors
-- [ ] No failing tests (run `pytest -v`)
-
----
-
-## Day 2: REST Routes & Async Consumer (4-5 hours)
-
-### Goal
-Implement all REST endpoints and the background consumer that processes orders from the queue.
+> **Note:** Do not validate `main.py` yet. It imports `trading.api.consumer` and
+> `trading.api.routes` which are empty scaffold files until Steps 2.1 and 2.2 are done.
+> Validation is at the end of Step 2.2.
 
 ---
 
@@ -568,7 +599,33 @@ async def list_tickers(
 
 ---
 
-### Step 2.3: Smoke Test the Server Manually (15 min)
+### Step 2.3: Validate main.py (5 min)
+
+`websocket.py` is still a stub (full implementation is Day 4). Add a minimal stub so
+`main.py` can import `ws_router` without error:
+
+**File:** `trading/api/websocket.py` (stub — will be replaced in Day 4)
+```python
+"""
+WebSocket endpoint for real-time market data.
+
+Full implementation added in Day 4.
+"""
+
+from fastapi import APIRouter
+
+ws_router = APIRouter()
+```
+
+Now validate the full app imports cleanly:
+
+```bash
+python -c "from main import app; print('App OK')"
+```
+
+---
+
+### Step 2.4: Smoke Test the Server Manually (15 min)
 
 Run the server:
 ```bash
@@ -612,10 +669,11 @@ curl -s -X POST http://localhost:8000/orders \
 ---
 
 ### Day 2 Checklist
-- [ ] `trading/api/consumer.py` created
-- [ ] `trading/api/routes.py` created with all 4 endpoints
-- [ ] Server starts with `uvicorn main:app --reload`
-- [ ] Manual curl tests pass
+- [ ] `trading/api/consumer.py` created (Step 2.1)
+- [ ] `trading/api/routes.py` created with all 4 endpoints (Step 2.2)
+- [ ] `main.py` validates cleanly: `python -c "from main import app; print('App OK')"` (Step 2.3)
+- [ ] Server starts with `uvicorn main:app --reload` (Step 2.4)
+- [ ] Manual curl tests pass (Step 2.4)
 - [ ] All existing tests still pass (`pytest -v`)
 
 ---
