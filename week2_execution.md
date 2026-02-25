@@ -688,6 +688,19 @@ Write async tests for every REST endpoint using httpx's async test client.
 ### Step 3.1: Write REST API Tests (3-4 hours)
 **File:** `trading/tests/test_api.py`
 
+**Dependency:** `asgi-lifespan` is required to trigger the FastAPI lifespan
+(which starts the consumer task) during tests. Without it, `POST /orders`
+hangs forever because no consumer is draining the queue.
+
+```bash
+uv add --dev asgi-lifespan
+```
+
+The `client` fixture uses `LifespanManager` to start/stop the full app
+lifespan (including the consumer task) for every test. This gives each
+test a fresh, isolated engine with no shared state — no `conftest.py`
+needed.
+
 ```python
 """
 Tests for REST API endpoints.
@@ -697,18 +710,26 @@ the full request/response cycle including the async consumer.
 """
 
 import pytest
-from decimal import Decimal
+from asgi_lifespan import LifespanManager
 from httpx import AsyncClient, ASGITransport
 from main import app
 
 
 @pytest.fixture
 async def client():
-    """Async test client that goes through full ASGI app lifecycle."""
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
-        yield ac
+    """
+    Async test client with full ASGI lifespan.
+
+    LifespanManager triggers main.py's startup (init_app_state +
+    consumer task) and shutdown (consumer task cancelled) for every
+    test. Without this the queue has no consumer and POST /orders
+    hangs forever awaiting the future.
+    """
+    async with LifespanManager(app) as manager:
+        async with AsyncClient(
+            transport=ASGITransport(app=manager.app), base_url="http://test"
+        ) as ac:
+            yield ac
 
 
 # ── /tickers ──────────────────────────────────────────────────────────────────
@@ -995,49 +1016,24 @@ async def test_cancel_already_filled_order(client):
 pytest trading/tests/test_api.py -v
 ```
 
-**Success criteria:** All tests pass.
+**Success criteria:** All 17 tests pass, 0 warnings.
 
 ---
 
-### Step 3.2: Handle Test Isolation (Important)
-
-Because the FastAPI app uses module-level singletons (`_engine`, `_order_queue`), tests share state across test functions within the same session. This means a sell order from `test_submit_orders_that_match` may affect `test_submit_market_order_with_liquidity`.
-
-To fix this, reset app state between tests using a fixture in `trading/tests/conftest.py`:
-
-```python
-# trading/tests/conftest.py
-import pytest
-import trading.api.dependencies as deps
-from trading.engine.matcher import MatchingEngine
-import asyncio
-
-
-@pytest.fixture(autouse=True)
-def reset_app_state():
-    """Reset engine and queue between tests to prevent state leakage."""
-    deps._engine = MatchingEngine(deps.SUPPORTED_TICKERS)
-    deps._order_queue = asyncio.Queue()
-    yield
-    deps._engine = None
-    deps._order_queue = None
-```
-
-This runs before every test automatically (`autouse=True`).
-
-**Re-run tests:**
-```bash
-pytest trading/tests/test_api.py -v
-```
+### Step 3.2: Test Isolation
+Test isolation is handled automatically by `LifespanManager`. Each test's
+`client` fixture starts a fresh lifespan (calling `init_app_state()` which
+creates a new `MatchingEngine` and `asyncio.Queue`), then shuts it down
+after the test. No `conftest.py` is needed.
 
 ---
 
 ### Day 3 Checklist
-- [ ] `trading/tests/test_api.py` created with all route tests
-- [ ] `trading/tests/conftest.py` created with state reset fixture
-- [ ] All REST API tests pass
-- [ ] All 82 previous tests still pass (`pytest -v`)
-- [ ] No test isolation issues
+- [ ] `asgi-lifespan` installed (`uv add --dev asgi-lifespan`)
+- [ ] `trading/tests/test_api.py` created with 17 tests covering all 4 endpoints
+- [ ] `client` fixture uses `LifespanManager` — consumer runs during every test
+- [ ] All 17 API tests pass with 0 warnings
+- [ ] All 99 tests pass (`pytest -v`)
 
 ---
 
@@ -1178,9 +1174,9 @@ def init_broadcaster() -> Broadcaster:
 
 ---
 
-### Step 4.3: Integrate Broadcaster Into Consumer (30 min)
+### Step 4.3: Integrate Broadcaster Into Consumer and main.py (30 min)
 
-Update `trading/api/consumer.py` to notify the broadcaster after each match:
+**File:** `trading/api/consumer.py` — add `broadcaster` parameter and call `notify_*` after each match:
 
 ```python
 """
@@ -1191,7 +1187,6 @@ import asyncio
 import logging
 
 from trading.engine.matcher import MatchingEngine
-from trading.events.models import Order
 from trading.api.broadcaster import Broadcaster
 
 logger = logging.getLogger(__name__)
@@ -1239,6 +1234,40 @@ async def run_consumer(
             break
         except Exception as exc:
             logger.error("Unexpected consumer error: %s", exc)
+```
+
+**File:** `main.py` — call `init_broadcaster()` at startup and pass it to the consumer:
+
+```python
+from trading.api.routes import router
+from trading.api.websocket import ws_router
+from trading.api.dependencies import init_app_state
+from trading.api.broadcaster import init_broadcaster
+from trading.api import consumer
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    engine, queue = init_app_state()
+    broadcaster = init_broadcaster()
+
+    consumer_task = asyncio.create_task(
+        consumer.run_consumer(engine, queue, broadcaster),
+        name="order-consumer"
+    )
+
+    yield
+
+    consumer_task.cancel()
+    try:
+        await consumer_task
+    except asyncio.CancelledError:
+        pass
+```
+
+**Validation:**
+```bash
+python -c "from main import app; print('OK')" && pytest -q
 ```
 
 ---
@@ -1321,49 +1350,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
 ---
 
-### Step 4.5: Update main.py to Initialize Broadcaster
-
-Update the `lifespan` in `main.py` to init the broadcaster and pass it to the consumer:
-
-```python
-from trading.api.dependencies import init_app_state, init_broadcaster
-from trading.api import consumer
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    engine, queue = init_app_state()
-    broadcaster = init_broadcaster()
-
-    consumer_task = asyncio.create_task(
-        consumer.run_consumer(engine, queue, broadcaster),
-        name="order-consumer"
-    )
-
-    yield
-
-    consumer_task.cancel()
-    try:
-        await consumer_task
-    except asyncio.CancelledError:
-        pass
-```
-
-Also update `trading/api/dependencies.py` to expose `init_broadcaster` and `get_broadcaster`:
-
-```python
-# Add to dependencies.py
-from trading.api.broadcaster import Broadcaster, init_broadcaster as _init_broadcaster, get_broadcaster as _get_broadcaster
-
-def init_broadcaster() -> Broadcaster:
-    return _init_broadcaster()
-
-def get_broadcaster() -> Broadcaster:
-    return _get_broadcaster()
-```
-
----
-
-### Step 4.6: Write WebSocket Tests (1 hour)
+### Step 4.5: Write WebSocket Tests (1 hour)
 **File:** `trading/tests/test_websocket.py`
 
 ```python
@@ -1499,12 +1486,10 @@ pytest trading/tests/test_websocket.py -v
 ---
 
 ### Day 4 Checklist
-- [ ] `trading/api/broadcaster.py` created
-- [ ] `trading/api/consumer.py` updated with broadcaster integration
-- [ ] `trading/api/websocket.py` created
-- [ ] `main.py` updated to init broadcaster
-- [ ] `httpx-ws` installed
-- [ ] WebSocket tests pass
+- [ ] `trading/api/broadcaster.py` created (Step 4.2)
+- [ ] `trading/api/consumer.py` updated with broadcaster integration; `main.py` updated to init broadcaster (Step 4.3)
+- [ ] `trading/api/websocket.py` implemented (Step 4.4)
+- [ ] WebSocket tests pass (Step 4.5)
 - [ ] All tests still pass (`pytest -v`)
 
 ---

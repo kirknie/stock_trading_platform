@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from trading.api.routes import router
 from trading.api.websocket import ws_router
 from trading.api.dependencies import init_app_state
+from trading.api.broadcaster import init_broadcaster
 from trading.api import consumer
 
 
@@ -23,10 +24,11 @@ from trading.api import consumer
 async def lifespan(app: FastAPI):
     """Initialize resources on startup; clean up on shutdown."""
     engine, queue = init_app_state()
+    broadcaster = init_broadcaster()
 
     # Start background consumer that drains the order queue
     consumer_task = asyncio.create_task(
-        consumer.run_consumer(engine, queue),
+        consumer.run_consumer(engine, queue, broadcaster),
         name="order-consumer"
     )
 
