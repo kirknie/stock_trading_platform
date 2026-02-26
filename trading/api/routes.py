@@ -30,7 +30,9 @@ from trading.events.models import Order
 router = APIRouter()
 
 
-def _build_order_book_response(engine: MatchingEngine, ticker: str) -> OrderBookResponse:
+def _build_order_book_response(
+    engine: MatchingEngine, ticker: str
+) -> OrderBookResponse:
     """Build a full OrderBookResponse from the live order book."""
     book = engine.manager.get_order_book(ticker)
 
@@ -92,7 +94,7 @@ async def submit_order(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"Ticker '{request.ticker}' is not supported. "
-                   f"Supported: {engine.get_supported_tickers()}",
+            f"Supported: {engine.get_supported_tickers()}",
         )
 
     order = Order(
@@ -177,7 +179,7 @@ async def get_order_book(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Ticker '{ticker}' not found. "
-                   f"Supported: {engine.get_supported_tickers()}",
+            f"Supported: {engine.get_supported_tickers()}",
         )
     return _build_order_book_response(engine, ticker)
 

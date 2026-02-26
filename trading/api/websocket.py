@@ -33,9 +33,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         msg = json.loads(raw)
 
         if msg.get("action") != "subscribe" or "tickers" not in msg:
-            await websocket.send_text(json.dumps({
-                "error": 'First message must be: {"action": "subscribe", "tickers": [...]}'
-            }))
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "error": 'First message must be: {"action": "subscribe", "tickers": [...]}'
+                    }
+                )
+            )
             return
 
         tickers = msg["tickers"]
@@ -43,10 +47,14 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         subscribed = True
         logger.info("Client subscribed to: %s", tickers)
 
-        await websocket.send_text(json.dumps({
-            "type": "subscribed",
-            "tickers": tickers,
-        }))
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "subscribed",
+                    "tickers": tickers,
+                }
+            )
+        )
 
         # Race between broadcaster messages and incoming WebSocket frames
         receive_task = asyncio.create_task(websocket.receive())

@@ -12,11 +12,12 @@ from pydantic import BaseModel, Field, model_validator
 
 from trading.events.models import OrderSide, OrderType, OrderStatus
 
-
 # ── Request Schemas ──────────────────────────────────────────────────────────
+
 
 class OrderRequest(BaseModel):
     """Request body for POST /orders."""
+
     ticker: str = Field(..., min_length=1, max_length=10, examples=["AAPL"])
     side: OrderSide
     order_type: OrderType
@@ -41,8 +42,10 @@ class OrderRequest(BaseModel):
 
 # ── Response Schemas ─────────────────────────────────────────────────────────
 
+
 class TradeResponse(BaseModel):
     """Single trade that occurred when an order matched."""
+
     trade_id: str
     ticker: str
     buyer_order_id: str
@@ -54,6 +57,7 @@ class TradeResponse(BaseModel):
 
 class OrderResponse(BaseModel):
     """Response after submitting an order."""
+
     order_id: str
     ticker: str
     side: OrderSide
@@ -67,6 +71,7 @@ class OrderResponse(BaseModel):
 
 class CancelResponse(BaseModel):
     """Response after canceling an order."""
+
     order_id: str
     success: bool
     message: str
@@ -74,12 +79,14 @@ class CancelResponse(BaseModel):
 
 class OrderBookLevel(BaseModel):
     """One price level in the order book."""
+
     price: Decimal
     quantity: int
 
 
 class OrderBookResponse(BaseModel):
     """Full order book snapshot for a ticker."""
+
     ticker: str
     bids: list[OrderBookLevel]  # sorted descending (best bid first)
     asks: list[OrderBookLevel]  # sorted ascending (best ask first)
@@ -90,4 +97,5 @@ class OrderBookResponse(BaseModel):
 
 class TickersResponse(BaseModel):
     """List of supported tickers."""
+
     tickers: list[str]

@@ -30,6 +30,7 @@ async def client():
 
 # ── /tickers ──────────────────────────────────────────────────────────────────
 
+
 async def test_list_tickers(client):
     response = await client.get("/tickers")
     assert response.status_code == 200
@@ -39,6 +40,7 @@ async def test_list_tickers(client):
 
 
 # ── /book/{ticker} ────────────────────────────────────────────────────────────
+
 
 async def test_get_empty_order_book(client):
     response = await client.get("/book/AAPL")
@@ -58,13 +60,16 @@ async def test_get_order_book_unknown_ticker(client):
 
 
 async def test_order_book_shows_resting_orders(client):
-    await client.post("/orders", json={
-        "ticker": "MSFT",
-        "side": "SELL",
-        "order_type": "LIMIT",
-        "quantity": 50,
-        "price": "300.00",
-    })
+    await client.post(
+        "/orders",
+        json={
+            "ticker": "MSFT",
+            "side": "SELL",
+            "order_type": "LIMIT",
+            "quantity": 50,
+            "price": "300.00",
+        },
+    )
 
     response = await client.get("/book/MSFT")
     assert response.status_code == 200
@@ -77,14 +82,18 @@ async def test_order_book_shows_resting_orders(client):
 
 # ── POST /orders ──────────────────────────────────────────────────────────────
 
+
 async def test_submit_limit_buy_no_match(client):
-    response = await client.post("/orders", json={
-        "ticker": "GOOGL",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 10,
-        "price": "2500.00",
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "GOOGL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 10,
+            "price": "2500.00",
+        },
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["ticker"] == "GOOGL"
@@ -94,13 +103,16 @@ async def test_submit_limit_buy_no_match(client):
 
 
 async def test_submit_limit_sell_no_match(client):
-    response = await client.post("/orders", json={
-        "ticker": "TSLA",
-        "side": "SELL",
-        "order_type": "LIMIT",
-        "quantity": 20,
-        "price": "250.00",
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "TSLA",
+            "side": "SELL",
+            "order_type": "LIMIT",
+            "quantity": 20,
+            "price": "250.00",
+        },
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["status"] == "NEW"
@@ -109,23 +121,29 @@ async def test_submit_limit_sell_no_match(client):
 
 async def test_submit_orders_that_match(client):
     # Sell side
-    sell_resp = await client.post("/orders", json={
-        "ticker": "NVDA",
-        "side": "SELL",
-        "order_type": "LIMIT",
-        "quantity": 100,
-        "price": "500.00",
-    })
+    sell_resp = await client.post(
+        "/orders",
+        json={
+            "ticker": "NVDA",
+            "side": "SELL",
+            "order_type": "LIMIT",
+            "quantity": 100,
+            "price": "500.00",
+        },
+    )
     assert sell_resp.status_code == 201
 
     # Buy side — should match immediately
-    buy_resp = await client.post("/orders", json={
-        "ticker": "NVDA",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 100,
-        "price": "500.00",
-    })
+    buy_resp = await client.post(
+        "/orders",
+        json={
+            "ticker": "NVDA",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 100,
+            "price": "500.00",
+        },
+    )
     assert buy_resp.status_code == 201
     data = buy_resp.json()
     assert data["status"] == "FILLED"
@@ -136,20 +154,26 @@ async def test_submit_orders_that_match(client):
 
 
 async def test_submit_market_order_with_liquidity(client):
-    await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "SELL",
-        "order_type": "LIMIT",
-        "quantity": 75,
-        "price": "155.00",
-    })
+    await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "SELL",
+            "order_type": "LIMIT",
+            "quantity": 75,
+            "price": "155.00",
+        },
+    )
 
-    response = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "MARKET",
-        "quantity": 75,
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "MARKET",
+            "quantity": 75,
+        },
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["status"] == "FILLED"
@@ -158,12 +182,15 @@ async def test_submit_market_order_with_liquidity(client):
 
 
 async def test_submit_market_order_no_liquidity(client):
-    response = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "MARKET",
-        "quantity": 999,
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "MARKET",
+            "quantity": 999,
+        },
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["status"] == "REJECTED"
@@ -172,22 +199,28 @@ async def test_submit_market_order_no_liquidity(client):
 
 async def test_submit_partial_fill(client):
     # Large sell
-    await client.post("/orders", json={
-        "ticker": "MSFT",
-        "side": "SELL",
-        "order_type": "LIMIT",
-        "quantity": 100,
-        "price": "310.00",
-    })
+    await client.post(
+        "/orders",
+        json={
+            "ticker": "MSFT",
+            "side": "SELL",
+            "order_type": "LIMIT",
+            "quantity": 100,
+            "price": "310.00",
+        },
+    )
 
     # Small buy — partial fill
-    response = await client.post("/orders", json={
-        "ticker": "MSFT",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 40,
-        "price": "310.00",
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "MSFT",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 40,
+            "price": "310.00",
+        },
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["status"] == "FILLED"
@@ -203,58 +236,74 @@ async def test_submit_partial_fill(client):
 
 
 async def test_submit_order_invalid_ticker(client):
-    response = await client.post("/orders", json={
-        "ticker": "INVALID",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 10,
-        "price": "100.00",
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "INVALID",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 10,
+            "price": "100.00",
+        },
+    )
     assert response.status_code == 422
 
 
 async def test_submit_limit_order_missing_price(client):
-    response = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 10,
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 10,
+        },
+    )
     assert response.status_code == 422
 
 
 async def test_submit_market_order_with_price_rejected(client):
-    response = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "MARKET",
-        "quantity": 10,
-        "price": "100.00",
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "MARKET",
+            "quantity": 10,
+            "price": "100.00",
+        },
+    )
     assert response.status_code == 422
 
 
 async def test_submit_zero_quantity_rejected(client):
-    response = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 0,
-        "price": "150.00",
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 0,
+            "price": "150.00",
+        },
+    )
     assert response.status_code == 422
 
 
 # ── POST /orders/{id}/cancel ──────────────────────────────────────────────────
 
+
 async def test_cancel_open_order(client):
-    submit = await client.post("/orders", json={
-        "ticker": "GOOGL",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 5,
-        "price": "1.00",
-    })
+    submit = await client.post(
+        "/orders",
+        json={
+            "ticker": "GOOGL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 5,
+            "price": "1.00",
+        },
+    )
     order_id = submit.json()["order_id"]
 
     cancel = await client.post(f"/orders/{order_id}/cancel")
@@ -277,20 +326,26 @@ async def test_cancel_nonexistent_order(client):
 
 
 async def test_cancel_already_filled_order(client):
-    await client.post("/orders", json={
-        "ticker": "TSLA",
-        "side": "SELL",
-        "order_type": "LIMIT",
-        "quantity": 10,
-        "price": "200.00",
-    })
-    buy = await client.post("/orders", json={
-        "ticker": "TSLA",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 10,
-        "price": "200.00",
-    })
+    await client.post(
+        "/orders",
+        json={
+            "ticker": "TSLA",
+            "side": "SELL",
+            "order_type": "LIMIT",
+            "quantity": 10,
+            "price": "200.00",
+        },
+    )
+    buy = await client.post(
+        "/orders",
+        json={
+            "ticker": "TSLA",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 10,
+            "price": "200.00",
+        },
+    )
     order_id = buy.json()["order_id"]
 
     cancel = await client.post(f"/orders/{order_id}/cancel")

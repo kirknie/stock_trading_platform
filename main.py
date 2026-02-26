@@ -28,8 +28,7 @@ async def lifespan(app: FastAPI):
 
     # Start background consumer that drains the order queue
     consumer_task = asyncio.create_task(
-        consumer.run_consumer(engine, queue, broadcaster),
-        name="order-consumer"
+        consumer.run_consumer(engine, queue, broadcaster), name="order-consumer"
     )
 
     yield  # Application runs here

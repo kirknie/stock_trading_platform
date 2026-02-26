@@ -55,13 +55,16 @@ class Broadcaster:
         best_ask: Decimal | None,
         spread: Decimal | None,
     ) -> None:
-        await self.broadcast(ticker, {
-            "type": "book_update",
-            "ticker": ticker,
-            "best_bid": best_bid,
-            "best_ask": best_ask,
-            "spread": spread,
-        })
+        await self.broadcast(
+            ticker,
+            {
+                "type": "book_update",
+                "ticker": ticker,
+                "best_bid": best_bid,
+                "best_ask": best_ask,
+                "spread": spread,
+            },
+        )
 
     async def notify_trade(
         self,
@@ -70,13 +73,16 @@ class Broadcaster:
         price: Decimal,
         quantity: int,
     ) -> None:
-        await self.broadcast(ticker, {
-            "type": "trade",
-            "trade_id": trade_id,
-            "ticker": ticker,
-            "price": price,
-            "quantity": quantity,
-        })
+        await self.broadcast(
+            ticker,
+            {
+                "type": "trade",
+                "trade_id": trade_id,
+                "ticker": ticker,
+                "price": price,
+                "quantity": quantity,
+            },
+        )
 
 
 def _decimal_default(obj: Any) -> str:
@@ -93,7 +99,9 @@ _broadcaster: Broadcaster | None = None
 def get_broadcaster() -> Broadcaster:
     global _broadcaster
     if _broadcaster is None:
-        raise RuntimeError("Broadcaster not initialized. Call init_broadcaster() first.")
+        raise RuntimeError(
+            "Broadcaster not initialized. Call init_broadcaster() first."
+        )
     return _broadcaster
 
 

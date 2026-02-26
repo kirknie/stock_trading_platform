@@ -70,9 +70,7 @@ async def run_benchmark(
                 return await send_order(client, payload)
 
         start_wall = time.perf_counter()
-        latencies: list[float] = await asyncio.gather(
-            *[bounded_send(p) for p in bench]
-        )
+        latencies: list[float] = await asyncio.gather(*[bounded_send(p) for p in bench])
         wall_time = time.perf_counter() - start_wall
 
     n = len(latencies)
@@ -135,7 +133,9 @@ async def main() -> None:
         print(f"  Latency p50      : {result['latency_p50_ms']} ms")
         print(f"  Latency p95      : {result['latency_p95_ms']} ms")
         print(f"  Latency p99      : {result['latency_p99_ms']} ms")
-        print(f"  Min / Max        : {result['latency_min_ms']} / {result['latency_max_ms']} ms")
+        print(
+            f"  Min / Max        : {result['latency_min_ms']} / {result['latency_max_ms']} ms"
+        )
     print()
 
 
