@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from trading.api.dependencies import get_engine, get_order_queue
+from trading.api.dependencies import get_engine, get_order_queue, get_risk
+from trading.risk.checker import RiskChecker, RiskViolation
 from trading.api.schemas import (
     CancelResponse,
     OrderBookLevel,
@@ -112,7 +113,13 @@ async def submit_order(
     loop = asyncio.get_event_loop()
     future: asyncio.Future = loop.create_future()
     await queue.put((order, future))
-    trades = await future
+    try:
+        trades = await future
+    except RiskViolation as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        )
 
     return OrderResponse(
         order_id=order.order_id,
@@ -146,6 +153,7 @@ async def submit_order(
 async def cancel_order(
     order_id: str,
     engine: MatchingEngine = Depends(get_engine),
+    risk: RiskChecker = Depends(get_risk),
 ) -> CancelResponse:
     """
     Cancel an open order by its ID.
@@ -153,7 +161,11 @@ async def cancel_order(
     Cancellation is synchronous (no queue) because it does not
     generate trades and must not be reordered with submissions.
     """
+    ticker_and_order = engine.order_registry.get(order_id)
     success = engine.cancel_order(order_id)
+    if success and ticker_and_order is not None:
+        _, order = ticker_and_order
+        risk.record_cancel(order)
     return CancelResponse(
         order_id=order_id,
         success=success,

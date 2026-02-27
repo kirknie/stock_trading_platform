@@ -1,5 +1,5 @@
 """
-Async order consumer with broadcaster integration.
+Async order consumer with risk checking and broadcaster integration.
 
 Reads (order, future) tuples from the queue and processes them
 through the MatchingEngine. The future is used to return the
@@ -16,6 +16,8 @@ import logging
 
 from trading.api.broadcaster import Broadcaster
 from trading.engine.matcher import MatchingEngine
+from trading.events.models import Order, OrderType
+from trading.risk.checker import RiskChecker, RiskViolation
 
 logger = logging.getLogger(__name__)
 
@@ -24,21 +26,49 @@ async def run_consumer(
     engine: MatchingEngine,
     queue: asyncio.Queue,
     broadcaster: Broadcaster,
+    risk: RiskChecker,
 ) -> None:
     """
     Continuously drain the order queue and process orders.
 
-    Each item in the queue is a (Order, asyncio.Future) pair.
-    The future is resolved with the list of trades generated.
-    After each order, notifies the broadcaster of book and trade events.
+    Flow per order:
+      1. risk.check(order)             -> raises RiskViolation on breach
+      2. risk.check_market_spread()    -> raises RiskViolation if spread too wide
+      3. risk.record_open_order(order) -> register in exposure tracking
+      4. engine.submit_order(order)    -> matching engine
+      5. risk.record_fill(trade, ...)  -> update position state per trade
+      6. risk.record_order_complete()  -> remove from open exposure if fully filled
+      7. broadcaster.notify_*()        -> push WebSocket events
     """
     logger.info("Order consumer started")
     while True:
         try:
             order, future = await queue.get()
             try:
+                risk.check(order)
+
+                if order.order_type == OrderType.MARKET:
+                    book = engine.manager.get_order_book(order.ticker)
+                    risk.check_market_spread(
+                        ticker=order.ticker,
+                        best_bid=book.get_best_bid(),
+                        best_ask=book.get_best_ask(),
+                    )
+
+                risk.record_open_order(order)
                 trades = engine.submit_order(order)
                 future.set_result(trades)
+
+                # Update risk state from confirmed fills
+                for trade in trades:
+                    buyer_entry = engine.order_registry.get(trade.buyer_order_id)
+                    seller_entry = engine.order_registry.get(trade.seller_order_id)
+                    buyer_account = buyer_entry[1].account_id if buyer_entry else order.account_id
+                    seller_account = seller_entry[1].account_id if seller_entry else order.account_id
+                    risk.record_fill(trade, buyer_account, seller_account)
+
+                if order.is_complete():
+                    risk.record_order_complete(order)
 
                 # Notify subscribers: book update for the ticker
                 book = engine.manager.get_order_book(order.ticker)
@@ -57,6 +87,8 @@ async def run_consumer(
                         quantity=trade.quantity,
                     )
 
+            except RiskViolation as exc:
+                future.set_exception(exc)
             except Exception as exc:
                 future.set_exception(exc)
             finally:

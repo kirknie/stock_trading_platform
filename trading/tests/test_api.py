@@ -191,10 +191,9 @@ async def test_submit_market_order_no_liquidity(client):
             "quantity": 999,
         },
     )
-    assert response.status_code == 201
-    data = response.json()
-    assert data["status"] == "REJECTED"
-    assert data["trades"] == []
+    # Empty book is now caught by the spread protection check before matching
+    assert response.status_code == 422
+    assert "empty" in response.json()["detail"].lower()
 
 
 async def test_submit_partial_fill(client):
