@@ -25,8 +25,6 @@ from trading.events.models import Order, Trade
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_LOG_PATH = Path(os.getenv("EVENT_LOG_PATH", "data/events.log"))
-
 
 class EventLog:
     """
@@ -37,8 +35,8 @@ class EventLog:
     the single consumer coroutine — no locking needed.
     """
 
-    def __init__(self, path: Path = DEFAULT_LOG_PATH) -> None:
-        self._path = path
+    def __init__(self, path: Path | None = None) -> None:
+        self._path = path if path is not None else Path(os.getenv("EVENT_LOG_PATH", "data/events.log"))
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._sequence: int = 0
 

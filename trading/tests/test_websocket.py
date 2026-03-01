@@ -14,8 +14,10 @@ from main import app
 
 
 @pytest.fixture
-async def managed_app():
+async def managed_app(tmp_path, monkeypatch):
     """Run the full app lifespan (consumer + broadcaster) for the test."""
+    monkeypatch.setenv("EVENT_LOG_PATH", str(tmp_path / "events.log"))
+    monkeypatch.setenv("SNAPSHOT_PATH", str(tmp_path / "snapshot.json"))
     async with LifespanManager(app) as manager:
         yield manager.app
 

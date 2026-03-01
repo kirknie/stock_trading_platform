@@ -189,6 +189,18 @@ class OrderBook:
 
         return trades
 
+    def _add_to_book(self, order: Order) -> None:
+        """
+        Place a resting order directly into the book without matching.
+
+        Used only during snapshot restore. The order must be a LIMIT order
+        with remaining quantity > 0 and status NEW or PARTIALLY_FILLED.
+        """
+        if order.side == OrderSide.BUY:
+            self.bids[order.price].append(order)
+        else:
+            self.asks[order.price].append(order)
+
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an order by ID. Returns True if found and canceled."""
         # Search bids
