@@ -105,14 +105,14 @@ async def test_append_order_submitted_returns_sequence(tmp_log: EventLog):
 
 
 async def test_append_trade_executed_event_type(tmp_log: EventLog, tmp_path: Path):
-    await tmp_log.append_trade_executed(make_trade())
+    await tmp_log.append_trade_executed(make_trade(), "acc1", "acc2")
     event = json.loads((tmp_path / "events.log").read_text().strip())
     assert event["event"] == "trade_executed"
 
 
 async def test_append_trade_executed_trade_fields(tmp_log: EventLog, tmp_path: Path):
     trade = make_trade("T-xyz")
-    await tmp_log.append_trade_executed(trade)
+    await tmp_log.append_trade_executed(trade, "acc1", "acc2")
     event = json.loads((tmp_path / "events.log").read_text().strip())
     t = event["trade"]
     assert t["trade_id"] == "T-xyz"
@@ -124,7 +124,7 @@ async def test_append_trade_executed_trade_fields(tmp_log: EventLog, tmp_path: P
 
 
 async def test_append_trade_executed_returns_sequence(tmp_log: EventLog):
-    seq = await tmp_log.append_trade_executed(make_trade())
+    seq = await tmp_log.append_trade_executed(make_trade(), "acc1", "acc2")
     assert seq == 1
 
 
@@ -154,7 +154,7 @@ async def test_append_order_cancelled_returns_sequence(tmp_log: EventLog):
 
 async def test_sequence_numbers_increment_per_event(tmp_log: EventLog):
     seq1 = await tmp_log.append_order_submitted(make_order("O-1"))
-    seq2 = await tmp_log.append_trade_executed(make_trade())
+    seq2 = await tmp_log.append_trade_executed(make_trade(), "acc1", "acc2")
     seq3 = await tmp_log.append_order_cancelled("O-1", "AAPL")
     assert seq1 == 1
     assert seq2 == 2
@@ -163,7 +163,7 @@ async def test_sequence_numbers_increment_per_event(tmp_log: EventLog):
 
 async def test_sequence_numbers_written_to_file(tmp_log: EventLog, tmp_path: Path):
     await tmp_log.append_order_submitted(make_order("O-1"))
-    await tmp_log.append_trade_executed(make_trade())
+    await tmp_log.append_trade_executed(make_trade(), "acc1", "acc2")
 
     lines = (tmp_path / "events.log").read_text().strip().splitlines()
     assert json.loads(lines[0])["seq"] == 1
@@ -175,7 +175,7 @@ async def test_sequence_numbers_written_to_file(tmp_log: EventLog, tmp_path: Pat
 
 async def test_events_are_appended_in_order(tmp_log: EventLog, tmp_path: Path):
     await tmp_log.append_order_submitted(make_order())
-    await tmp_log.append_trade_executed(make_trade())
+    await tmp_log.append_trade_executed(make_trade(), "acc1", "acc2")
     await tmp_log.append_order_cancelled("O-2", "MSFT")
 
     lines = (tmp_path / "events.log").read_text().strip().splitlines()
@@ -190,7 +190,7 @@ async def test_events_are_appended_in_order(tmp_log: EventLog, tmp_path: Path):
 
 async def test_read_all_yields_events_in_order(tmp_log: EventLog):
     await tmp_log.append_order_submitted(make_order())
-    await tmp_log.append_trade_executed(make_trade())
+    await tmp_log.append_trade_executed(make_trade(), "acc1", "acc2")
 
     events = [e async for e in tmp_log.read_all()]
     assert len(events) == 2
@@ -206,7 +206,7 @@ async def test_read_all_returns_empty_for_missing_file(tmp_path: Path):
 
 async def test_read_all_after_sequence_filters_events(tmp_log: EventLog):
     await tmp_log.append_order_submitted(make_order("O-1"))
-    await tmp_log.append_trade_executed(make_trade("T-1"))
+    await tmp_log.append_trade_executed(make_trade("T-1"), "acc1", "acc2")
     await tmp_log.append_order_cancelled("O-1", "AAPL")
 
     # Only events with seq > 1
@@ -218,7 +218,7 @@ async def test_read_all_after_sequence_filters_events(tmp_log: EventLog):
 
 async def test_read_all_after_sequence_zero_yields_all(tmp_log: EventLog):
     await tmp_log.append_order_submitted(make_order())
-    await tmp_log.append_trade_executed(make_trade())
+    await tmp_log.append_trade_executed(make_trade(), "acc1", "acc2")
 
     events = [e async for e in tmp_log.read_all(after_sequence=0)]
     assert len(events) == 2
@@ -253,7 +253,7 @@ async def test_market_order_price_serialises_as_null(tmp_log: EventLog, tmp_path
 
 async def test_each_event_has_ts_field(tmp_log: EventLog):
     await tmp_log.append_order_submitted(make_order())
-    await tmp_log.append_trade_executed(make_trade())
+    await tmp_log.append_trade_executed(make_trade(), "acc1", "acc2")
     await tmp_log.append_order_cancelled("O-1", "AAPL")
 
     events = [e async for e in tmp_log.read_all()]

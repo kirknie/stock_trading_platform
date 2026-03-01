@@ -57,8 +57,10 @@ class EventLog:
         )
         return seq
 
-    async def append_trade_executed(self, trade: Trade) -> int:
-        """Log a confirmed trade. Returns the sequence number assigned."""
+    async def append_trade_executed(
+        self, trade: Trade, buyer_account: str, seller_account: str
+    ) -> int:
+        """Log a confirmed trade with account IDs. Returns the sequence number assigned."""
         seq = self._next_seq()
         await self._write(
             {
@@ -66,6 +68,8 @@ class EventLog:
                 "seq": seq,
                 "ts": _now(),
                 "trade": _trade_to_dict(trade),
+                "buyer_account": buyer_account,
+                "seller_account": seller_account,
             }
         )
         return seq

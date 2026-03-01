@@ -66,7 +66,6 @@ async def run_consumer(
 
                 # Update risk state and persist each trade
                 for trade in trades:
-                    await event_log.append_trade_executed(trade)
                     buyer_entry = engine.order_registry.get(trade.buyer_order_id)
                     seller_entry = engine.order_registry.get(trade.seller_order_id)
                     buyer_account = (
@@ -74,6 +73,9 @@ async def run_consumer(
                     )
                     seller_account = (
                         seller_entry[1].account_id if seller_entry else order.account_id
+                    )
+                    await event_log.append_trade_executed(
+                        trade, buyer_account, seller_account
                     )
                     risk.record_fill(trade, buyer_account, seller_account)
 

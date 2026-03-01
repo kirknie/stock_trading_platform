@@ -35,9 +35,10 @@ from trading.api.dependencies import init_app_state
 from trading.api.routes import router
 from trading.api.websocket import ws_router
 from trading.engine.matcher import MatchingEngine
-from trading.events.models import Order, OrderSide, OrderStatus, OrderType
-from trading.persistence.snapshot import SnapshotManager
+from trading.events.models import Order, OrderSide, OrderStatus, OrderType, Trade
 from trading.persistence.event_log import EventLog
+from trading.persistence.snapshot import SnapshotManager
+from trading.risk.checker import RiskChecker
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,9 @@ async def lifespan(app: FastAPI):
     async for event in event_log.read_all(after_sequence=replay_after):
         _replay_event(engine, event)
     logger.info("Event log replay complete")
+
+    await _rebuild_risk(risk, engine, event_log)
+    logger.info("Risk state rebuilt")
 
     # ── Background tasks ──────────────────────────────────────────────────────
     consumer_task = asyncio.create_task(
@@ -91,8 +95,7 @@ def _replay_event(engine: MatchingEngine, event: dict) -> None:
 
     Only order_submitted and order_cancelled are replayed — trade_executed
     events are a consequence of submit_order() and are generated naturally
-    during replay. Risk state is NOT updated here; it is rebuilt separately
-    during Day 5 recovery (out of scope for this step).
+    during replay. Risk state is rebuilt separately by _rebuild_risk().
     """
     if event["event"] == "order_submitted":
         od = event["order"]
@@ -112,6 +115,51 @@ def _replay_event(engine: MatchingEngine, event: dict) -> None:
 
     elif event["event"] == "order_cancelled":
         engine.cancel_order(event["order_id"])
+
+
+async def _rebuild_risk(
+    risk: RiskChecker,
+    engine: MatchingEngine,
+    event_log: EventLog,
+) -> None:
+    """
+    Rebuild RiskChecker state after engine replay.
+
+    Called once at startup, after _replay_event has reconstructed the order
+    book and order_registry.
+
+    Two phases:
+      Phase 1: Open notional exposure — iterate order_registry (resting LIMIT
+               orders are all open; replay has already removed filled/cancelled
+               ones from the registry).
+      Phase 2: Filled positions — replay all trade_executed events from seq 0.
+               Account IDs are stored directly in each event, so no registry
+               lookup is needed here.
+    """
+    # Phase 1: rebuild _open_orders from what is currently resting
+    for _, (__, order) in engine.order_registry.items():
+        if order.order_type == OrderType.LIMIT:
+            risk.record_open_order(order)
+
+    # Phase 2: rebuild _positions from every trade_executed event ever logged
+    async for event in event_log.read_all(after_sequence=0):
+        if event["event"] != "trade_executed":
+            continue
+        t = event["trade"]
+        trade = Trade(
+            trade_id=t["trade_id"],
+            ticker=t["ticker"],
+            buyer_order_id=t["buyer_order_id"],
+            seller_order_id=t["seller_order_id"],
+            price=Decimal(t["price"]),
+            quantity=t["quantity"],
+            timestamp=datetime.fromisoformat(t["timestamp"]),
+        )
+        risk.record_fill(
+            trade,
+            buyer_account=event["buyer_account"],
+            seller_account=event["seller_account"],
+        )
 
 
 async def _periodic_snapshot(
