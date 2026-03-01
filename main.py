@@ -64,6 +64,9 @@ async def lifespan(app: FastAPI):
     await _rebuild_risk(risk, engine, event_log)
     logger.info("Risk state rebuilt")
 
+    engine.evict_stale_registry()
+    logger.info("Initial registry eviction complete")
+
     # ── Background tasks ──────────────────────────────────────────────────────
     consumer_task = asyncio.create_task(
         consumer.run_consumer(engine, queue, broadcaster, risk, event_log),
@@ -172,6 +175,7 @@ async def _periodic_snapshot(
     while True:
         try:
             await asyncio.sleep(interval_seconds)
+            engine.evict_stale_registry()
             await snapshot_mgr.save(engine, event_log._sequence)
         except asyncio.CancelledError:
             break
