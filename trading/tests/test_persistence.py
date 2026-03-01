@@ -31,7 +31,6 @@ from trading.events.models import Order, OrderSide, OrderType, Trade
 from trading.persistence.event_log import EventLog
 from trading.persistence.snapshot import SNAPSHOT_VERSION, SnapshotManager
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -354,8 +353,12 @@ async def test_save_captures_resting_ask(tmp_path: Path):
 async def test_save_does_not_capture_filled_orders(tmp_path: Path):
     engine = make_engine()
     # Sell rests first, then buy matches it fully
-    engine.submit_order(make_resting_order("O-sell", "AAPL", OrderSide.SELL, "150.00", 100))
-    engine.submit_order(make_resting_order("O-buy", "AAPL", OrderSide.BUY, "150.00", 100))
+    engine.submit_order(
+        make_resting_order("O-sell", "AAPL", OrderSide.SELL, "150.00", 100)
+    )
+    engine.submit_order(
+        make_resting_order("O-buy", "AAPL", OrderSide.BUY, "150.00", 100)
+    )
 
     mgr = SnapshotManager(path=tmp_path / "snapshot.json")
     await mgr.save(engine, sequence=2)
@@ -396,13 +399,16 @@ async def test_load_roundtrip(tmp_path: Path):
 
 async def test_restore_rebuilds_best_bid(tmp_path: Path):
     engine1 = make_engine()
-    engine1.submit_order(make_resting_order("O-1", "AAPL", OrderSide.BUY, "149.00", 100))
+    engine1.submit_order(
+        make_resting_order("O-1", "AAPL", OrderSide.BUY, "149.00", 100)
+    )
 
     mgr = SnapshotManager(path=tmp_path / "snapshot.json")
     await mgr.save(engine1, sequence=1)
 
     engine2 = make_engine()
     snapshot = await mgr.load()
+    assert snapshot is not None
     mgr.restore(engine2, snapshot)
 
     book = engine2.manager.get_order_book("AAPL")
@@ -411,13 +417,17 @@ async def test_restore_rebuilds_best_bid(tmp_path: Path):
 
 async def test_restore_rebuilds_best_ask(tmp_path: Path):
     engine1 = make_engine()
-    engine1.submit_order(make_resting_order("O-1", "AAPL", OrderSide.SELL, "151.00", 50))
+    engine1.submit_order(
+        make_resting_order("O-1", "AAPL", OrderSide.SELL, "151.00", 50)
+    )
 
     mgr = SnapshotManager(path=tmp_path / "snapshot.json")
     await mgr.save(engine1, sequence=1)
 
     engine2 = make_engine()
-    mgr.restore(engine2, await mgr.load())
+    snapshot = await mgr.load()
+    assert snapshot is not None
+    mgr.restore(engine2, snapshot)
 
     book = engine2.manager.get_order_book("AAPL")
     assert book.get_best_ask() == Decimal("151.00")
@@ -425,13 +435,17 @@ async def test_restore_rebuilds_best_ask(tmp_path: Path):
 
 async def test_restore_populates_order_registry(tmp_path: Path):
     engine1 = make_engine()
-    engine1.submit_order(make_resting_order("O-reg", "AAPL", OrderSide.BUY, "148.00", 30))
+    engine1.submit_order(
+        make_resting_order("O-reg", "AAPL", OrderSide.BUY, "148.00", 30)
+    )
 
     mgr = SnapshotManager(path=tmp_path / "snapshot.json")
     await mgr.save(engine1, sequence=1)
 
     engine2 = make_engine()
-    mgr.restore(engine2, await mgr.load())
+    snapshot = await mgr.load()
+    assert snapshot is not None
+    mgr.restore(engine2, snapshot)
 
     assert "O-reg" in engine2.order_registry
     ticker, order = engine2.order_registry["O-reg"]
@@ -441,14 +455,20 @@ async def test_restore_populates_order_registry(tmp_path: Path):
 
 async def test_restore_multiple_price_levels(tmp_path: Path):
     engine1 = make_engine()
-    engine1.submit_order(make_resting_order("O-1", "AAPL", OrderSide.BUY, "149.00", 100))
-    engine1.submit_order(make_resting_order("O-2", "AAPL", OrderSide.BUY, "148.00", 200))
+    engine1.submit_order(
+        make_resting_order("O-1", "AAPL", OrderSide.BUY, "149.00", 100)
+    )
+    engine1.submit_order(
+        make_resting_order("O-2", "AAPL", OrderSide.BUY, "148.00", 200)
+    )
 
     mgr = SnapshotManager(path=tmp_path / "snapshot.json")
     await mgr.save(engine1, sequence=2)
 
     engine2 = make_engine()
-    mgr.restore(engine2, await mgr.load())
+    snapshot = await mgr.load()
+    assert snapshot is not None
+    mgr.restore(engine2, snapshot)
 
     book = engine2.manager.get_order_book("AAPL")
     assert book.get_best_bid() == Decimal("149.00")
@@ -460,7 +480,9 @@ async def test_restore_empty_snapshot_leaves_engine_empty(tmp_path: Path):
     await mgr.save(make_engine(), sequence=0)
 
     engine2 = make_engine()
-    mgr.restore(engine2, await mgr.load())
+    snapshot = await mgr.load()
+    assert snapshot is not None
+    mgr.restore(engine2, snapshot)
 
     book = engine2.manager.get_order_book("AAPL")
     assert book.get_best_bid() is None

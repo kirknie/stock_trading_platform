@@ -10,8 +10,6 @@ Covers:
   - Cached response fields match the original
 """
 
-import pytest
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -67,10 +65,13 @@ async def test_duplicate_returns_same_status(client):
 
 async def test_duplicate_returns_same_trades(client):
     # Submit a matching sell first so the buy generates a trade
-    await client.post("/orders", json=limit_order(
-        ticker="AAPL", side="SELL", quantity=10, price="150.00"
-    ))
-    payload = limit_order(order_id="key-5", ticker="AAPL", side="BUY", quantity=10, price="150.00")
+    await client.post(
+        "/orders",
+        json=limit_order(ticker="AAPL", side="SELL", quantity=10, price="150.00"),
+    )
+    payload = limit_order(
+        order_id="key-5", ticker="AAPL", side="BUY", quantity=10, price="150.00"
+    )
     resp1 = await client.post("/orders", json=payload)
     resp2 = await client.post("/orders", json=payload)
     assert resp2.json()["trades"] == resp1.json()["trades"]
@@ -127,8 +128,13 @@ async def test_order_without_id_adds_two_resting_orders(client):
 
 
 async def test_different_order_ids_create_separate_orders(client):
-    base = {"ticker": "NVDA", "side": "BUY", "order_type": "LIMIT",
-            "quantity": 5, "price": "800.00"}
+    base = {
+        "ticker": "NVDA",
+        "side": "BUY",
+        "order_type": "LIMIT",
+        "quantity": 5,
+        "price": "800.00",
+    }
     resp1 = await client.post("/orders", json={**base, "order_id": "key-A"})
     resp2 = await client.post("/orders", json={**base, "order_id": "key-B"})
     assert resp1.status_code == 201
@@ -138,13 +144,15 @@ async def test_different_order_ids_create_separate_orders(client):
 
 async def test_idempotency_is_key_based_not_payload_based(client):
     """Same key, different payload → cached first response returned."""
-    resp1 = await client.post("/orders", json=limit_order(
-        order_id="key-C", ticker="AAPL", quantity=10, price="100.00"
-    ))
+    resp1 = await client.post(
+        "/orders",
+        json=limit_order(order_id="key-C", ticker="AAPL", quantity=10, price="100.00"),
+    )
     # Same key, different price — should return cached first response
-    resp2 = await client.post("/orders", json=limit_order(
-        order_id="key-C", ticker="AAPL", quantity=99, price="200.00"
-    ))
+    resp2 = await client.post(
+        "/orders",
+        json=limit_order(order_id="key-C", ticker="AAPL", quantity=99, price="200.00"),
+    )
     assert resp2.status_code == 200
     assert resp2.json()["order_id"] == resp1.json()["order_id"]
     assert resp2.json()["quantity"] == 10  # original quantity, not 99

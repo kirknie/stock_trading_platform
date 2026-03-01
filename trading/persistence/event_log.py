@@ -36,42 +36,52 @@ class EventLog:
     """
 
     def __init__(self, path: Path | None = None) -> None:
-        self._path = path if path is not None else Path(os.getenv("EVENT_LOG_PATH", "data/events.log"))
+        self._path = (
+            path
+            if path is not None
+            else Path(os.getenv("EVENT_LOG_PATH", "data/events.log"))
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._sequence: int = 0
 
     async def append_order_submitted(self, order: Order) -> int:
         """Log an order submission. Returns the sequence number assigned."""
         seq = self._next_seq()
-        await self._write({
-            "event": "order_submitted",
-            "seq": seq,
-            "ts": _now(),
-            "order": _order_to_dict(order),
-        })
+        await self._write(
+            {
+                "event": "order_submitted",
+                "seq": seq,
+                "ts": _now(),
+                "order": _order_to_dict(order),
+            }
+        )
         return seq
 
     async def append_trade_executed(self, trade: Trade) -> int:
         """Log a confirmed trade. Returns the sequence number assigned."""
         seq = self._next_seq()
-        await self._write({
-            "event": "trade_executed",
-            "seq": seq,
-            "ts": _now(),
-            "trade": _trade_to_dict(trade),
-        })
+        await self._write(
+            {
+                "event": "trade_executed",
+                "seq": seq,
+                "ts": _now(),
+                "trade": _trade_to_dict(trade),
+            }
+        )
         return seq
 
     async def append_order_cancelled(self, order_id: str, ticker: str) -> int:
         """Log a successful cancellation. Returns the sequence number assigned."""
         seq = self._next_seq()
-        await self._write({
-            "event": "order_cancelled",
-            "seq": seq,
-            "ts": _now(),
-            "order_id": order_id,
-            "ticker": ticker,
-        })
+        await self._write(
+            {
+                "event": "order_cancelled",
+                "seq": seq,
+                "ts": _now(),
+                "order_id": order_id,
+                "ticker": ticker,
+            }
+        )
         return seq
 
     async def read_all(self, after_sequence: int = 0) -> AsyncIterator[dict[str, Any]]:

@@ -79,18 +79,24 @@ def get_event_log() -> EventLog:
 def get_snapshot_manager() -> SnapshotManager:
     """Return the shared SnapshotManager instance."""
     if _snapshot_manager is None:
-        raise RuntimeError("SnapshotManager not initialized. Call init_app_state() first.")
+        raise RuntimeError(
+            "SnapshotManager not initialized. Call init_app_state() first."
+        )
     return _snapshot_manager
 
 
 def get_idempotency_store() -> IdempotencyStore:
     """Return the shared IdempotencyStore instance."""
     if _idempotency_store is None:
-        raise RuntimeError("IdempotencyStore not initialized. Call init_app_state() first.")
+        raise RuntimeError(
+            "IdempotencyStore not initialized. Call init_app_state() first."
+        )
     return _idempotency_store
 
 
-def init_app_state() -> tuple[MatchingEngine, asyncio.Queue, RiskChecker, EventLog, SnapshotManager]:
+def init_app_state() -> (
+    tuple[MatchingEngine, asyncio.Queue, RiskChecker, EventLog, SnapshotManager]
+):
     """
     Initialize shared application state.
 

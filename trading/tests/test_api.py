@@ -5,8 +5,6 @@ Uses httpx.AsyncClient with FastAPI's ASGI transport to test
 the full request/response cycle including the async consumer.
 """
 
-import pytest
-
 
 # ── /tickers ──────────────────────────────────────────────────────────────────
 

@@ -11,12 +11,10 @@ from decimal import Decimal
 
 from trading.events.models import Order, OrderSide, OrderType, Trade
 from trading.risk.checker import (
-    MAX_NOTIONAL_EXPOSURE,
     MAX_POSITION_QUANTITY,
     RiskChecker,
     RiskViolation,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -89,9 +87,7 @@ def test_position_limit_allows_after_sell_reduces_position():
     buy_trade = make_trade(buyer_order_id="O-1", quantity=800)
     checker.record_fill(buy_trade, buyer_account="acc1", seller_account="acc2")
 
-    sell_trade = make_trade(
-        buyer_order_id="O-3", seller_order_id="O-2", quantity=300
-    )
+    sell_trade = make_trade(buyer_order_id="O-3", seller_order_id="O-2", quantity=300)
     checker.record_fill(sell_trade, buyer_account="acc3", seller_account="acc1")
 
     # Position is now 500 — 400 more = 900 <= 1000
@@ -200,37 +196,46 @@ def test_spread_check_allows_one_sided_book():
 
 
 async def test_api_rejects_order_exceeding_position_limit(client):
-    response = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": MAX_POSITION_QUANTITY + 1,
-        "price": "1.00",
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": MAX_POSITION_QUANTITY + 1,
+            "price": "1.00",
+        },
+    )
     assert response.status_code == 422
     assert "Position limit exceeded" in response.json()["detail"]
 
 
 async def test_api_rejects_order_exceeding_notional_limit(client):
     # 10,000 × $200 = $2,000,000 > $1,000,000 limit
-    response = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 10_000,
-        "price": "200.00",
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 10_000,
+            "price": "200.00",
+        },
+    )
     assert response.status_code == 422
     assert "Notional exposure limit exceeded" in response.json()["detail"]
 
 
 async def test_api_rejects_market_order_on_empty_book(client):
-    response = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "MARKET",
-        "quantity": 10,
-    })
+    response = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "MARKET",
+            "quantity": 10,
+        },
+    )
     assert response.status_code == 422
     assert "empty" in response.json()["detail"].lower()
 
@@ -238,35 +243,44 @@ async def test_api_rejects_market_order_on_empty_book(client):
 async def test_api_cancel_reduces_notional_exposure(client):
     """Cancelling an order frees up notional exposure for future orders."""
     # Submit a large order that consumes most of the notional limit
-    resp = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 9_000,
-        "price": "100.00",  # $900,000 — within $1M limit
-    })
+    resp = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 9_000,
+            "price": "100.00",  # $900,000 — within $1M limit
+        },
+    )
     assert resp.status_code == 201
     order_id = resp.json()["order_id"]
 
     # A second order worth $200,000 would push total to $1,100,000 — rejected
-    resp2 = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 2_000,
-        "price": "100.00",
-    })
+    resp2 = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 2_000,
+            "price": "100.00",
+        },
+    )
     assert resp2.status_code == 422
 
     # Cancel the first order — exposure drops back to $0
     await client.post(f"/orders/{order_id}/cancel")
 
     # Now the second order should pass
-    resp3 = await client.post("/orders", json={
-        "ticker": "AAPL",
-        "side": "BUY",
-        "order_type": "LIMIT",
-        "quantity": 2_000,
-        "price": "100.00",
-    })
+    resp3 = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 2_000,
+            "price": "100.00",
+        },
+    )
     assert resp3.status_code == 201

@@ -81,7 +81,9 @@ class RiskChecker:
             RiskViolation: if book has no liquidity or spread is too wide.
         """
         if best_bid is None and best_ask is None:
-            raise RiskViolation(f"Market order rejected for {ticker}: order book is empty")
+            raise RiskViolation(
+                f"Market order rejected for {ticker}: order book is empty"
+            )
         if best_bid is None or best_ask is None:
             # One-sided book — still allows execution against the available side.
             return
@@ -105,7 +107,9 @@ class RiskChecker:
             (order.order_id, order.quantity, price)
         )
 
-    def record_fill(self, trade: Trade, buyer_account: str, seller_account: str) -> None:
+    def record_fill(
+        self, trade: Trade, buyer_account: str, seller_account: str
+    ) -> None:
         """
         Update position state after a confirmed trade.
 

@@ -16,7 +16,7 @@ import logging
 
 from trading.api.broadcaster import Broadcaster
 from trading.engine.matcher import MatchingEngine
-from trading.events.models import Order, OrderType
+from trading.events.models import OrderType
 from trading.persistence.event_log import EventLog
 from trading.risk.checker import RiskChecker, RiskViolation
 
@@ -69,8 +69,12 @@ async def run_consumer(
                     await event_log.append_trade_executed(trade)
                     buyer_entry = engine.order_registry.get(trade.buyer_order_id)
                     seller_entry = engine.order_registry.get(trade.seller_order_id)
-                    buyer_account = buyer_entry[1].account_id if buyer_entry else order.account_id
-                    seller_account = seller_entry[1].account_id if seller_entry else order.account_id
+                    buyer_account = (
+                        buyer_entry[1].account_id if buyer_entry else order.account_id
+                    )
+                    seller_account = (
+                        seller_entry[1].account_id if seller_entry else order.account_id
+                    )
                     risk.record_fill(trade, buyer_account, seller_account)
 
                 if order.is_complete():

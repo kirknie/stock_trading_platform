@@ -34,7 +34,11 @@ class SnapshotManager:
     """Saves and restores full order book state to/from a JSON file."""
 
     def __init__(self, path: Path | None = None) -> None:
-        self._path = path if path is not None else Path(os.getenv("SNAPSHOT_PATH", "data/snapshot.json"))
+        self._path = (
+            path
+            if path is not None
+            else Path(os.getenv("SNAPSHOT_PATH", "data/snapshot.json"))
+        )
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
     async def save(self, engine: MatchingEngine, sequence: int) -> None:
@@ -53,16 +57,8 @@ class SnapshotManager:
 
         for ticker in engine.get_supported_tickers():
             book = engine.manager.get_order_book(ticker)
-            bids = [
-                _order_to_dict(o)
-                for queue in book.bids.values()
-                for o in queue
-            ]
-            asks = [
-                _order_to_dict(o)
-                for queue in book.asks.values()
-                for o in queue
-            ]
+            bids = [_order_to_dict(o) for queue in book.bids.values() for o in queue]
+            asks = [_order_to_dict(o) for queue in book.asks.values() for o in queue]
             snapshot["books"][ticker] = {"bids": bids, "asks": asks}
 
         async with aiofiles.open(self._path, "w") as f:

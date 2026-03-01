@@ -15,7 +15,13 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from trading.api.dependencies import get_engine, get_event_log, get_idempotency_store, get_order_queue, get_risk
+from trading.api.dependencies import (
+    get_engine,
+    get_event_log,
+    get_idempotency_store,
+    get_order_queue,
+    get_risk,
+)
 from trading.api.dependencies import IdempotencyStore
 from trading.persistence.event_log import EventLog
 from trading.risk.checker import RiskChecker, RiskViolation
@@ -88,7 +94,7 @@ async def submit_order(
     engine: MatchingEngine = Depends(get_engine),
     queue: asyncio.Queue = Depends(get_order_queue),
     idempotency: IdempotencyStore = Depends(get_idempotency_store),
-) -> OrderResponse:
+) -> OrderResponse | JSONResponse:
     """
     Submit a limit or market order.
 
