@@ -1,5 +1,5 @@
 """
-Tests for event log persistence.
+Tests for event log and snapshot persistence.
 
 Covers:
   - append_order_submitted  — correct JSON written to file
@@ -11,6 +11,11 @@ Covers:
   - read_all(after_sequence=N) — filters events by sequence
   - Missing file            — read_all() returns empty iterator
   - Market order price      — None serialises as JSON null
+  - SnapshotManager.save()  — correct JSON structure on disk
+  - SnapshotManager.load()  — reads back saved snapshot
+  - SnapshotManager.restore() — rebuilds order book and registry
+  - Version mismatch        — unknown version returns None
+  - Missing snapshot        — load() returns None
 """
 
 import json
@@ -20,8 +25,11 @@ from pathlib import Path
 
 import pytest
 
+from trading.api.dependencies import SUPPORTED_TICKERS
+from trading.engine.matcher import MatchingEngine
 from trading.events.models import Order, OrderSide, OrderType, Trade
 from trading.persistence.event_log import EventLog
+from trading.persistence.snapshot import SNAPSHOT_VERSION, SnapshotManager
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -261,3 +269,200 @@ async def test_parent_directory_created_automatically(tmp_path: Path):
     log = EventLog(path=nested_path)
     await log.append_order_submitted(make_order())
     assert nested_path.exists()
+
+
+# ── SnapshotManager helpers ───────────────────────────────────────────────────
+
+
+def make_engine() -> MatchingEngine:
+    return MatchingEngine(SUPPORTED_TICKERS)
+
+
+def make_resting_order(
+    order_id: str = "O-snap",
+    ticker: str = "AAPL",
+    side: OrderSide = OrderSide.BUY,
+    price: str = "150.00",
+    quantity: int = 100,
+) -> Order:
+    return Order(
+        order_id=order_id,
+        ticker=ticker,
+        side=side,
+        order_type=OrderType.LIMIT,
+        quantity=quantity,
+        price=Decimal(price),
+        timestamp=datetime.now(tz=timezone.utc),
+        account_id="acc1",
+    )
+
+
+# ── SnapshotManager.save / load ───────────────────────────────────────────────
+
+
+async def test_save_creates_file(tmp_path: Path):
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(make_engine(), sequence=0)
+    assert (tmp_path / "snapshot.json").exists()
+
+
+async def test_save_includes_version_and_sequence(tmp_path: Path):
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(make_engine(), sequence=42)
+
+    data = json.loads((tmp_path / "snapshot.json").read_text())
+    assert data["version"] == SNAPSHOT_VERSION
+    assert data["sequence"] == 42
+
+
+async def test_save_includes_all_supported_tickers(tmp_path: Path):
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(make_engine(), sequence=0)
+
+    data = json.loads((tmp_path / "snapshot.json").read_text())
+    assert set(data["books"].keys()) == set(SUPPORTED_TICKERS)
+
+
+async def test_save_captures_resting_bid(tmp_path: Path):
+    engine = make_engine()
+    engine.submit_order(make_resting_order("O-1", "AAPL", OrderSide.BUY, "149.00", 100))
+
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(engine, sequence=1)
+
+    data = json.loads((tmp_path / "snapshot.json").read_text())
+    bids = data["books"]["AAPL"]["bids"]
+    assert len(bids) == 1
+    assert bids[0]["order_id"] == "O-1"
+    assert bids[0]["price"] == "149.00"
+    assert bids[0]["quantity"] == 100
+
+
+async def test_save_captures_resting_ask(tmp_path: Path):
+    engine = make_engine()
+    engine.submit_order(make_resting_order("O-2", "MSFT", OrderSide.SELL, "310.00", 50))
+
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(engine, sequence=1)
+
+    data = json.loads((tmp_path / "snapshot.json").read_text())
+    asks = data["books"]["MSFT"]["asks"]
+    assert len(asks) == 1
+    assert asks[0]["order_id"] == "O-2"
+
+
+async def test_save_does_not_capture_filled_orders(tmp_path: Path):
+    engine = make_engine()
+    # Sell rests first, then buy matches it fully
+    engine.submit_order(make_resting_order("O-sell", "AAPL", OrderSide.SELL, "150.00", 100))
+    engine.submit_order(make_resting_order("O-buy", "AAPL", OrderSide.BUY, "150.00", 100))
+
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(engine, sequence=2)
+
+    data = json.loads((tmp_path / "snapshot.json").read_text())
+    assert data["books"]["AAPL"]["bids"] == []
+    assert data["books"]["AAPL"]["asks"] == []
+
+
+async def test_load_returns_none_for_missing_file(tmp_path: Path):
+    mgr = SnapshotManager(path=tmp_path / "no_snapshot.json")
+    assert await mgr.load() is None
+
+
+async def test_load_returns_none_for_wrong_version(tmp_path: Path):
+    snap_path = tmp_path / "snapshot.json"
+    snap_path.write_text(json.dumps({"version": 99, "sequence": 0, "books": {}}))
+
+    mgr = SnapshotManager(path=snap_path)
+    assert await mgr.load() is None
+
+
+async def test_load_roundtrip(tmp_path: Path):
+    engine = make_engine()
+    engine.submit_order(make_resting_order("O-rt", "AAPL", OrderSide.BUY, "148.00", 75))
+
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(engine, sequence=5)
+
+    snapshot = await mgr.load()
+    assert snapshot is not None
+    assert snapshot["sequence"] == 5
+    assert snapshot["books"]["AAPL"]["bids"][0]["order_id"] == "O-rt"
+
+
+# ── SnapshotManager.restore ───────────────────────────────────────────────────
+
+
+async def test_restore_rebuilds_best_bid(tmp_path: Path):
+    engine1 = make_engine()
+    engine1.submit_order(make_resting_order("O-1", "AAPL", OrderSide.BUY, "149.00", 100))
+
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(engine1, sequence=1)
+
+    engine2 = make_engine()
+    snapshot = await mgr.load()
+    mgr.restore(engine2, snapshot)
+
+    book = engine2.manager.get_order_book("AAPL")
+    assert book.get_best_bid() == Decimal("149.00")
+
+
+async def test_restore_rebuilds_best_ask(tmp_path: Path):
+    engine1 = make_engine()
+    engine1.submit_order(make_resting_order("O-1", "AAPL", OrderSide.SELL, "151.00", 50))
+
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(engine1, sequence=1)
+
+    engine2 = make_engine()
+    mgr.restore(engine2, await mgr.load())
+
+    book = engine2.manager.get_order_book("AAPL")
+    assert book.get_best_ask() == Decimal("151.00")
+
+
+async def test_restore_populates_order_registry(tmp_path: Path):
+    engine1 = make_engine()
+    engine1.submit_order(make_resting_order("O-reg", "AAPL", OrderSide.BUY, "148.00", 30))
+
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(engine1, sequence=1)
+
+    engine2 = make_engine()
+    mgr.restore(engine2, await mgr.load())
+
+    assert "O-reg" in engine2.order_registry
+    ticker, order = engine2.order_registry["O-reg"]
+    assert ticker == "AAPL"
+    assert order.quantity == 30
+
+
+async def test_restore_multiple_price_levels(tmp_path: Path):
+    engine1 = make_engine()
+    engine1.submit_order(make_resting_order("O-1", "AAPL", OrderSide.BUY, "149.00", 100))
+    engine1.submit_order(make_resting_order("O-2", "AAPL", OrderSide.BUY, "148.00", 200))
+
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(engine1, sequence=2)
+
+    engine2 = make_engine()
+    mgr.restore(engine2, await mgr.load())
+
+    book = engine2.manager.get_order_book("AAPL")
+    assert book.get_best_bid() == Decimal("149.00")
+    assert len(book.bids) == 2
+
+
+async def test_restore_empty_snapshot_leaves_engine_empty(tmp_path: Path):
+    mgr = SnapshotManager(path=tmp_path / "snapshot.json")
+    await mgr.save(make_engine(), sequence=0)
+
+    engine2 = make_engine()
+    mgr.restore(engine2, await mgr.load())
+
+    book = engine2.manager.get_order_book("AAPL")
+    assert book.get_best_bid() is None
+    assert book.get_best_ask() is None
+    assert engine2.order_registry == {}
