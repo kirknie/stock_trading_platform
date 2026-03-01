@@ -14,7 +14,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from trading.api.dependencies import get_engine, get_order_queue, get_risk
+from trading.api.dependencies import get_engine, get_event_log, get_order_queue, get_risk
+from trading.persistence.event_log import EventLog
 from trading.risk.checker import RiskChecker, RiskViolation
 from trading.api.schemas import (
     CancelResponse,
@@ -154,6 +155,7 @@ async def cancel_order(
     order_id: str,
     engine: MatchingEngine = Depends(get_engine),
     risk: RiskChecker = Depends(get_risk),
+    event_log: EventLog = Depends(get_event_log),
 ) -> CancelResponse:
     """
     Cancel an open order by its ID.
@@ -166,6 +168,7 @@ async def cancel_order(
     if success and ticker_and_order is not None:
         _, order = ticker_and_order
         risk.record_cancel(order)
+        await event_log.append_order_cancelled(order_id, order.ticker)
     return CancelResponse(
         order_id=order_id,
         success=success,

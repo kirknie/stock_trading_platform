@@ -23,12 +23,12 @@ from trading.api import consumer
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize resources on startup; clean up on shutdown."""
-    engine, queue, risk = init_app_state()
+    engine, queue, risk, event_log = init_app_state()
     broadcaster = init_broadcaster()
 
     # Start background consumer that drains the order queue
     consumer_task = asyncio.create_task(
-        consumer.run_consumer(engine, queue, broadcaster, risk), name="order-consumer"
+        consumer.run_consumer(engine, queue, broadcaster, risk, event_log), name="order-consumer"
     )
 
     yield  # Application runs here

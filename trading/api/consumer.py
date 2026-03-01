@@ -17,6 +17,7 @@ import logging
 from trading.api.broadcaster import Broadcaster
 from trading.engine.matcher import MatchingEngine
 from trading.events.models import Order, OrderType
+from trading.persistence.event_log import EventLog
 from trading.risk.checker import RiskChecker, RiskViolation
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ async def run_consumer(
     queue: asyncio.Queue,
     broadcaster: Broadcaster,
     risk: RiskChecker,
+    event_log: EventLog,
 ) -> None:
     """
     Continuously drain the order queue and process orders.
@@ -34,11 +36,13 @@ async def run_consumer(
     Flow per order:
       1. risk.check(order)             -> raises RiskViolation on breach
       2. risk.check_market_spread()    -> raises RiskViolation if spread too wide
-      3. risk.record_open_order(order) -> register in exposure tracking
-      4. engine.submit_order(order)    -> matching engine
-      5. risk.record_fill(trade, ...)  -> update position state per trade
-      6. risk.record_order_complete()  -> remove from open exposure if fully filled
-      7. broadcaster.notify_*()        -> push WebSocket events
+      3. event_log.append_order_submitted() -> persist before matching
+      4. risk.record_open_order(order) -> register in exposure tracking
+      5. engine.submit_order(order)    -> matching engine
+      6. event_log.append_trade_executed() -> persist each trade
+      7. risk.record_fill(trade, ...)  -> update position state per trade
+      8. risk.record_order_complete()  -> remove from open exposure if fully filled
+      9. broadcaster.notify_*()        -> push WebSocket events
     """
     logger.info("Order consumer started")
     while True:
@@ -56,11 +60,13 @@ async def run_consumer(
                     )
 
                 risk.record_open_order(order)
+                await event_log.append_order_submitted(order)
                 trades = engine.submit_order(order)
                 future.set_result(trades)
 
-                # Update risk state from confirmed fills
+                # Update risk state and persist each trade
                 for trade in trades:
+                    await event_log.append_trade_executed(trade)
                     buyer_entry = engine.order_registry.get(trade.buyer_order_id)
                     seller_entry = engine.order_registry.get(trade.seller_order_id)
                     buyer_account = buyer_entry[1].account_id if buyer_entry else order.account_id
