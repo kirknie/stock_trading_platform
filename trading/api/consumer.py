@@ -62,9 +62,10 @@ async def run_consumer(
                 risk.record_open_order(order)
                 await event_log.append_order_submitted(order)
                 trades = engine.submit_order(order)
-                future.set_result(trades)
 
-                # Update risk state and persist each trade
+                # Persist and update risk state for each trade before
+                # resolving the future — guarantees the log is written
+                # before the HTTP response is returned to the caller.
                 for trade in trades:
                     buyer_entry = engine.order_registry.get(trade.buyer_order_id)
                     seller_entry = engine.order_registry.get(trade.seller_order_id)
@@ -81,6 +82,8 @@ async def run_consumer(
 
                 if order.is_complete():
                     risk.record_order_complete(order)
+
+                future.set_result(trades)
 
                 # Notify subscribers: book update for the ticker
                 book = engine.manager.get_order_book(order.ticker)
