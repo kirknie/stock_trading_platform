@@ -18,6 +18,14 @@ from trading.events.models import OrderSide, OrderType, OrderStatus
 class OrderRequest(BaseModel):
     """Request body for POST /orders."""
 
+    order_id: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=128,
+        description="Client-supplied ID for idempotent submission. "
+                    "If omitted, a UUID is generated server-side.",
+        examples=["my-order-001"],
+    )
     ticker: str = Field(..., min_length=1, max_length=10, examples=["AAPL"])
     side: OrderSide
     order_type: OrderType

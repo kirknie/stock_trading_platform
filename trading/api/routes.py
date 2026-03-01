@@ -13,8 +13,10 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 
-from trading.api.dependencies import get_engine, get_event_log, get_order_queue, get_risk
+from trading.api.dependencies import get_engine, get_event_log, get_idempotency_store, get_order_queue, get_risk
+from trading.api.dependencies import IdempotencyStore
 from trading.persistence.event_log import EventLog
 from trading.risk.checker import RiskChecker, RiskViolation
 from trading.api.schemas import (
@@ -85,13 +87,25 @@ async def submit_order(
     request: OrderRequest,
     engine: MatchingEngine = Depends(get_engine),
     queue: asyncio.Queue = Depends(get_order_queue),
+    idempotency: IdempotencyStore = Depends(get_idempotency_store),
 ) -> OrderResponse:
     """
     Submit a limit or market order.
 
+    If a client-supplied order_id is provided and has been seen before,
+    the cached response is returned immediately (HTTP 200) without creating
+    a duplicate order. New orders return HTTP 201.
+
     The order is placed on the async queue and processed by the
     background consumer. The response includes any trades generated.
     """
+    # Idempotency check — must come before any side effects
+    if request.order_id is not None and request.order_id in idempotency:
+        return JSONResponse(
+            content=idempotency.get(request.order_id),
+            status_code=status.HTTP_200_OK,
+        )
+
     if request.ticker not in engine.get_supported_tickers():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -100,7 +114,7 @@ async def submit_order(
         )
 
     order = Order(
-        order_id=str(uuid.uuid4()),
+        order_id=request.order_id or str(uuid.uuid4()),
         ticker=request.ticker,
         side=request.side,
         order_type=request.order_type,
@@ -122,7 +136,7 @@ async def submit_order(
             detail=str(exc),
         )
 
-    return OrderResponse(
+    response = OrderResponse(
         order_id=order.order_id,
         ticker=order.ticker,
         side=order.side,
@@ -144,6 +158,12 @@ async def submit_order(
             for t in trades
         ],
     )
+
+    # Cache for future duplicate submissions
+    if request.order_id is not None:
+        idempotency.store(request.order_id, response.model_dump(mode="json"))
+
+    return response
 
 
 @router.post(
