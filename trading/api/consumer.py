@@ -17,6 +17,7 @@ import logging
 from trading.api.broadcaster import Broadcaster
 from trading.engine.matcher import MatchingEngine
 from trading.events.models import OrderType
+from trading.metrics.collector import queue_depth
 from trading.persistence.event_log import EventLog
 from trading.risk.checker import RiskChecker, RiskViolation
 
@@ -48,6 +49,7 @@ async def run_consumer(
     while True:
         try:
             order, future = await queue.get()
+            queue_depth.labels(ticker=order.ticker).set(queue.qsize())
             try:
                 risk.check(order)
 

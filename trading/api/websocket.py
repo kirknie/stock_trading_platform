@@ -15,6 +15,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from trading.api.broadcaster import get_broadcaster
+from trading.metrics.collector import active_ws_connections
 
 logger = logging.getLogger(__name__)
 ws_router = APIRouter()
@@ -23,6 +24,7 @@ ws_router = APIRouter()
 @ws_router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
+    active_ws_connections.inc()
     broadcaster = get_broadcaster()
     client_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
     subscribed = False
@@ -89,3 +91,4 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     finally:
         if subscribed:
             broadcaster.unsubscribe(client_queue)
+        active_ws_connections.dec()

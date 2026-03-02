@@ -28,6 +28,8 @@ from datetime import datetime
 from decimal import Decimal
 
 from fastapi import FastAPI
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from trading.api import consumer
 from trading.api.broadcaster import init_broadcaster
@@ -225,3 +227,8 @@ app = FastAPI(
 
 app.include_router(router)
 app.include_router(ws_router)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)

@@ -9,6 +9,7 @@ Endpoints:
 """
 
 import asyncio
+import time
 import uuid
 from datetime import datetime, timezone
 
@@ -36,6 +37,12 @@ from trading.api.schemas import (
 )
 from trading.engine.matcher import MatchingEngine
 from trading.events.models import Order
+from trading.metrics.collector import (
+    order_processing_seconds,
+    orders_rejected,
+    orders_submitted,
+    trades_executed,
+)
 
 router = APIRouter()
 
@@ -134,14 +141,27 @@ async def submit_order(
     # Enqueue order and await result from consumer
     loop = asyncio.get_event_loop()
     future: asyncio.Future = loop.create_future()
+    _start = time.perf_counter()
     await queues[order.ticker].put((order, future))
     try:
         trades = await future
     except RiskViolation as exc:
+        orders_rejected.labels(ticker=order.ticker, reason="risk_violation").inc()
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         )
+
+    order_processing_seconds.labels(ticker=order.ticker).observe(
+        time.perf_counter() - _start
+    )
+    orders_submitted.labels(
+        ticker=order.ticker,
+        side=order.side.value,
+        order_type=order.order_type.value,
+    ).inc()
+    for _ in trades:
+        trades_executed.labels(ticker=order.ticker).inc()
 
     response = OrderResponse(
         order_id=order.order_id,

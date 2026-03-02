@@ -182,16 +182,12 @@ Latency, Orders/sec, Error rates". Prometheus is listed in the tech stack.
 
 ### Step 2.1 — Install dependency
 
-Add to `pyproject.toml` under `[project.dependencies]`:
-
-```toml
-prometheus-client>=0.21.0
-```
-
 Run:
 ```bash
-pip install prometheus-client
+uv add prometheus-client
 ```
+
+This adds `prometheus-client` to `[project.dependencies]` in `pyproject.toml` automatically.
 
 ### Step 2.2 — Create `trading/metrics/collector.py`
 
@@ -359,15 +355,12 @@ Currently uses `logging.getLogger(__name__)` with stdlib format. `plan.md` lists
 
 ### Step 3.1 — Install dependency
 
-Add to `pyproject.toml` under `[project.dependencies]`:
-
-```toml
-structlog>=25.0.0
-```
-
 Run:
 ```bash
-pip install structlog
+uv add structlog
+```
+
+This adds `structlog` to `[project.dependencies]` in `pyproject.toml` automatically.
 ```
 
 ### Step 3.2 — Create `trading/logging_config.py`
@@ -861,8 +854,7 @@ A production-minded trading backend built with Python 3.13 + FastAPI + asyncio.
 ### Install
 git clone ...
 cd stock_trading_platform
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync --all-groups
 
 ### Run
 uvicorn main:app --port 8000
@@ -984,18 +976,18 @@ Gap 9  (resume bullets)    — ~30m — update summary doc
 ## Validation Checklist (after all gaps closed)
 
 ```bash
-python -m pytest trading/tests/ -q
+uv run pytest trading/tests/ -q
 # Expected: 210+ tests pass
 
-mypy trading/ --ignore-missing-imports
+uv run mypy trading/ --ignore-missing-imports
 # Expected: no errors
 
-ruff check trading/ main.py
-black trading/ main.py --check
+uv run ruff check trading/ main.py
+uv run black trading/ main.py --check
 
-uvicorn main:app --port 8000 &
+uv run uvicorn main:app --port 8000 &
 curl -s http://localhost:8000/health | python -m json.tool
 curl -s http://localhost:8000/ready | python -m json.tool
 curl -s http://localhost:8000/metrics | head -20
-python benchmarks/throughput.py
+uv run python benchmarks/throughput.py
 ```
