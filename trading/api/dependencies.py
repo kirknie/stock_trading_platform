@@ -119,7 +119,9 @@ def get_idempotency_store() -> IdempotencyStore:
 
 
 def init_app_state() -> (
-    tuple[MatchingEngine, dict[str, asyncio.Queue], RiskChecker, EventLog, SnapshotManager]
+    tuple[
+        MatchingEngine, dict[str, asyncio.Queue], RiskChecker, EventLog, SnapshotManager
+    ]
 ):
     """
     Initialize shared application state.

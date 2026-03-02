@@ -25,8 +25,12 @@ class MatchingEngine:
             tickers: List of ticker symbols to support (e.g., ['AAPL', 'MSFT', 'GOOGL'])
         """
         self.manager = OrderBookManager(tickers)
-        self.order_registry: Dict[str, tuple[str, Order]] = {}  # order_id -> (ticker, order)
-        self._registry_timestamps: Dict[str, datetime] = {}  # order_id -> registration time
+        self.order_registry: Dict[str, tuple[str, Order]] = (
+            {}
+        )  # order_id -> (ticker, order)
+        self._registry_timestamps: Dict[str, datetime] = (
+            {}
+        )  # order_id -> registration time
 
     def submit_order(self, order: Order) -> List[Trade]:
         """

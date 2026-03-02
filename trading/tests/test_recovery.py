@@ -12,13 +12,11 @@ Pattern for each test:
 """
 
 import json
-import pytest
 from asgi_lifespan import LifespanManager
 from httpx import AsyncClient, ASGITransport
 from main import app
 
-from trading.risk.checker import MAX_NOTIONAL_EXPOSURE, MAX_POSITION_QUANTITY
-
+from trading.risk.checker import MAX_POSITION_QUANTITY
 
 # ── Fixture ───────────────────────────────────────────────────────────────────
 
@@ -44,12 +42,6 @@ def make_limit_order(
     return payload
 
 
-async def _make_client(tmp_path, monkeypatch) -> AsyncClient:
-    """Helper — returns an AsyncClient backed by a fresh LifespanManager."""
-    monkeypatch.setenv("EVENT_LOG_PATH", str(tmp_path / "events.log"))
-    monkeypatch.setenv("SNAPSHOT_PATH", str(tmp_path / "snapshot.json"))
-
-
 # ── Position limit rebuilt from trade_executed events ─────────────────────────
 
 
@@ -68,12 +60,18 @@ async def test_position_limit_enforced_after_restart(tmp_path, monkeypatch):
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
             # Resting sell so the buy can match
-            await client.post("/orders", json=make_limit_order(
-                side="SELL", quantity=9_000, price="100.00", account_id="acc-sell"
-            ))
-            resp = await client.post("/orders", json=make_limit_order(
-                side="BUY", quantity=9_000, price="100.00", account_id="acc1"
-            ))
+            await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="SELL", quantity=9_000, price="100.00", account_id="acc-sell"
+                ),
+            )
+            resp = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="BUY", quantity=9_000, price="100.00", account_id="acc1"
+                ),
+            )
             assert resp.status_code == 201
             assert resp.json()["filled_quantity"] == 9_000
 
@@ -83,9 +81,12 @@ async def test_position_limit_enforced_after_restart(tmp_path, monkeypatch):
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
             # 2,000 more would push acc1 to 11,000 > 10,000 limit
-            resp = await client.post("/orders", json=make_limit_order(
-                side="BUY", quantity=2_000, price="100.00", account_id="acc1"
-            ))
+            resp = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="BUY", quantity=2_000, price="100.00", account_id="acc1"
+                ),
+            )
             assert resp.status_code == 422
             assert "Position limit exceeded" in resp.json()["detail"]
 
@@ -101,20 +102,29 @@ async def test_position_limit_allows_order_within_remaining_after_restart(
         async with AsyncClient(
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
-            await client.post("/orders", json=make_limit_order(
-                side="SELL", quantity=5_000, price="100.00", account_id="acc-sell"
-            ))
-            await client.post("/orders", json=make_limit_order(
-                side="BUY", quantity=5_000, price="100.00", account_id="acc1"
-            ))
+            await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="SELL", quantity=5_000, price="100.00", account_id="acc-sell"
+                ),
+            )
+            await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="BUY", quantity=5_000, price="100.00", account_id="acc1"
+                ),
+            )
 
     async with LifespanManager(app) as manager:
         async with AsyncClient(
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
-            resp = await client.post("/orders", json=make_limit_order(
-                side="BUY", quantity=4_000, price="100.00", account_id="acc1"
-            ))
+            resp = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="BUY", quantity=4_000, price="100.00", account_id="acc1"
+                ),
+            )
             assert resp.status_code == 201
 
 
@@ -135,9 +145,12 @@ async def test_notional_exposure_enforced_after_restart(tmp_path, monkeypatch):
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
             # $900,000 open — within $1M limit
-            resp = await client.post("/orders", json=make_limit_order(
-                side="BUY", quantity=9_000, price="100.00", account_id="acc1"
-            ))
+            resp = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="BUY", quantity=9_000, price="100.00", account_id="acc1"
+                ),
+            )
             assert resp.status_code == 201
 
     async with LifespanManager(app) as manager:
@@ -145,9 +158,12 @@ async def test_notional_exposure_enforced_after_restart(tmp_path, monkeypatch):
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
             # $200,000 more → total $1,100,000 > $1,000,000
-            resp = await client.post("/orders", json=make_limit_order(
-                side="BUY", quantity=2_000, price="100.00", account_id="acc1"
-            ))
+            resp = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="BUY", quantity=2_000, price="100.00", account_id="acc1"
+                ),
+            )
             assert resp.status_code == 422
             assert "Notional exposure limit exceeded" in resp.json()["detail"]
 
@@ -164,9 +180,12 @@ async def test_notional_exposure_freed_after_cancel_and_restart(tmp_path, monkey
         async with AsyncClient(
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
-            resp = await client.post("/orders", json=make_limit_order(
-                side="BUY", quantity=9_000, price="100.00", account_id="acc1"
-            ))
+            resp = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="BUY", quantity=9_000, price="100.00", account_id="acc1"
+                ),
+            )
             order_id = resp.json()["order_id"]
             cancel = await client.post(f"/orders/{order_id}/cancel")
             assert cancel.json()["success"] is True
@@ -176,9 +195,12 @@ async def test_notional_exposure_freed_after_cancel_and_restart(tmp_path, monkey
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
             # Cancelled order is not in registry → exposure is $0 → passes
-            resp = await client.post("/orders", json=make_limit_order(
-                side="BUY", quantity=9_000, price="100.00", account_id="acc1"
-            ))
+            resp = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="BUY", quantity=9_000, price="100.00", account_id="acc1"
+                ),
+            )
             assert resp.status_code == 201
 
 
@@ -197,31 +219,55 @@ async def test_position_rebuilt_independently_per_account(tmp_path, monkeypatch)
         async with AsyncClient(
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
-            await client.post("/orders", json=make_limit_order(
-                ticker="MSFT", side="SELL", quantity=9_000,
-                price="100.00", account_id="acc-sell"
-            ))
-            await client.post("/orders", json=make_limit_order(
-                ticker="MSFT", side="BUY", quantity=9_000,
-                price="100.00", account_id="acc1"
-            ))
+            await client.post(
+                "/orders",
+                json=make_limit_order(
+                    ticker="MSFT",
+                    side="SELL",
+                    quantity=9_000,
+                    price="100.00",
+                    account_id="acc-sell",
+                ),
+            )
+            await client.post(
+                "/orders",
+                json=make_limit_order(
+                    ticker="MSFT",
+                    side="BUY",
+                    quantity=9_000,
+                    price="100.00",
+                    account_id="acc1",
+                ),
+            )
 
     async with LifespanManager(app) as manager:
         async with AsyncClient(
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
             # acc1: at 9,000 — 2,000 more exceeds limit
-            bad = await client.post("/orders", json=make_limit_order(
-                ticker="MSFT", side="BUY", quantity=2_000,
-                price="100.00", account_id="acc1"
-            ))
+            bad = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    ticker="MSFT",
+                    side="BUY",
+                    quantity=2_000,
+                    price="100.00",
+                    account_id="acc1",
+                ),
+            )
             assert bad.status_code == 422
 
             # acc2: at 0 — 9,000 is fine
-            good = await client.post("/orders", json=make_limit_order(
-                ticker="MSFT", side="BUY", quantity=9_000,
-                price="100.00", account_id="acc2"
-            ))
+            good = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    ticker="MSFT",
+                    side="BUY",
+                    quantity=9_000,
+                    price="100.00",
+                    account_id="acc2",
+                ),
+            )
             assert good.status_code == 201
 
 
@@ -240,12 +286,15 @@ async def test_fresh_restart_with_no_log_has_zero_risk_state(tmp_path, monkeypat
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
             # Full limit order should be accepted on a fresh engine
-            resp = await client.post("/orders", json=make_limit_order(
-                side="BUY",
-                quantity=MAX_POSITION_QUANTITY,
-                price="1.00",
-                account_id="fresh-acc",
-            ))
+            resp = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="BUY",
+                    quantity=MAX_POSITION_QUANTITY,
+                    price="1.00",
+                    account_id="fresh-acc",
+                ),
+            )
             assert resp.status_code == 201
 
 
@@ -264,12 +313,18 @@ async def test_trade_executed_event_contains_accounts(tmp_path, monkeypatch):
         async with AsyncClient(
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
-            await client.post("/orders", json=make_limit_order(
-                side="SELL", quantity=10, price="150.00", account_id="seller-acc"
-            ))
-            await client.post("/orders", json=make_limit_order(
-                side="BUY", quantity=10, price="150.00", account_id="buyer-acc"
-            ))
+            await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="SELL", quantity=10, price="150.00", account_id="seller-acc"
+                ),
+            )
+            await client.post(
+                "/orders",
+                json=make_limit_order(
+                    side="BUY", quantity=10, price="150.00", account_id="buyer-acc"
+                ),
+            )
 
     log_lines = (tmp_path / "events.log").read_text().strip().splitlines()
     trade_events = [

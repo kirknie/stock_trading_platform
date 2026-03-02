@@ -15,11 +15,9 @@ Pattern for each test:
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-import pytest
 
 from trading.engine.matcher import MatchingEngine
-from trading.events.models import Order, OrderSide, OrderStatus, OrderType
-
+from trading.events.models import Order, OrderSide, OrderType
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -108,16 +106,24 @@ def test_evict_returns_count():
     # Submit two sell orders (makers) then match each with a buy (aggressor).
     # Only the makers enter the registry; aggressors that fully fill are never added.
     engine.submit_order(
-        make_limit_order("O-s1", ticker="AAPL", side=OrderSide.SELL, price="150.00", quantity=100)
+        make_limit_order(
+            "O-s1", ticker="AAPL", side=OrderSide.SELL, price="150.00", quantity=100
+        )
     )
     engine.submit_order(
-        make_limit_order("O-b1", ticker="AAPL", side=OrderSide.BUY, price="150.00", quantity=100)
+        make_limit_order(
+            "O-b1", ticker="AAPL", side=OrderSide.BUY, price="150.00", quantity=100
+        )
     )
     engine.submit_order(
-        make_limit_order("O-s2", ticker="MSFT", side=OrderSide.SELL, price="300.00", quantity=50)
+        make_limit_order(
+            "O-s2", ticker="MSFT", side=OrderSide.SELL, price="300.00", quantity=50
+        )
     )
     engine.submit_order(
-        make_limit_order("O-b2", ticker="MSFT", side=OrderSide.BUY, price="300.00", quantity=50)
+        make_limit_order(
+            "O-b2", ticker="MSFT", side=OrderSide.BUY, price="300.00", quantity=50
+        )
     )
 
     # Only the two sell (maker) orders are in the registry
@@ -165,14 +171,16 @@ def test_only_stale_terminal_orders_evicted_mixed_registry():
 
     assert evicted == 1
     assert "O-sell1" not in engine.order_registry  # stale terminal — evicted
-    assert "O-rest" in engine.order_registry        # resting — kept
-    assert "O-sell2" in engine.order_registry       # terminal but fresh — kept
+    assert "O-rest" in engine.order_registry  # resting — kept
+    assert "O-sell2" in engine.order_registry  # terminal but fresh — kept
 
 
 def test_cancel_removes_from_registry_immediately():
     """Cancellation removes the entry immediately — eviction has nothing to do."""
     engine = make_engine()
-    engine.submit_order(make_limit_order("O-cancel", side=OrderSide.BUY, price="100.00"))
+    engine.submit_order(
+        make_limit_order("O-cancel", side=OrderSide.BUY, price="100.00")
+    )
     assert "O-cancel" in engine.order_registry
 
     engine.cancel_order("O-cancel")

@@ -15,12 +15,10 @@ Pattern for restart tests:
 import json
 from datetime import datetime, timedelta, timezone
 
-import pytest
 from asgi_lifespan import LifespanManager
 from httpx import ASGITransport, AsyncClient
 
 from main import app
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

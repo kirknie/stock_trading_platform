@@ -31,7 +31,11 @@ from fastapi import FastAPI
 
 from trading.api import consumer
 from trading.api.broadcaster import init_broadcaster
-from trading.api.dependencies import IdempotencyStore, get_idempotency_store, init_app_state
+from trading.api.dependencies import (
+    IdempotencyStore,
+    get_idempotency_store,
+    init_app_state,
+)
 from trading.api.routes import router
 from trading.api.websocket import ws_router
 from trading.engine.matcher import MatchingEngine

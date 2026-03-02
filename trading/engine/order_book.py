@@ -196,7 +196,9 @@ class OrderBook:
         Used only during snapshot restore. The order must be a LIMIT order
         with remaining quantity > 0 and status NEW or PARTIALLY_FILLED.
         """
-        assert order.price is not None, "_add_to_book requires a LIMIT order with a price"
+        assert (
+            order.price is not None
+        ), "_add_to_book requires a LIMIT order with a price"
         if order.side == OrderSide.BUY:
             self.bids[order.price].append(order)
         else:

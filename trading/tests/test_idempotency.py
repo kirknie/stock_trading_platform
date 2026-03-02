@@ -10,7 +10,6 @@ Covers:
   - Cached response fields match the original
 """
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
