@@ -242,21 +242,90 @@ async def test_api_rejects_market_order_on_empty_book(client):
 
 async def test_api_cancel_reduces_notional_exposure(client):
     """Cancelling an order frees up notional exposure for future orders."""
-    # Submit a large order that consumes most of the notional limit
-    resp = await client.post(
+    # Spread exposure across two tickers so neither per-ticker limit ($500k) is hit
+    # while approaching the total limit ($1M).
+    # AAPL: 4,500 × $100 = $450,000  (within $500k per-ticker)
+    resp_aapl = await client.post(
         "/orders",
         json={
             "ticker": "AAPL",
             "side": "BUY",
             "order_type": "LIMIT",
-            "quantity": 9_000,
-            "price": "100.00",  # $900,000 — within $1M limit
+            "quantity": 4_500,
+            "price": "100.00",
+            "account_id": "acc-notional-cancel",
         },
     )
-    assert resp.status_code == 201
-    order_id = resp.json()["order_id"]
+    assert resp_aapl.status_code == 201
+    aapl_order_id = resp_aapl.json()["order_id"]
 
-    # A second order worth $200,000 would push total to $1,100,000 — rejected
+    # MSFT: 4,500 × $100 = $450,000 — total now $900,000 (within $1M)
+    resp_msft = await client.post(
+        "/orders",
+        json={
+            "ticker": "MSFT",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 4_500,
+            "price": "100.00",
+            "account_id": "acc-notional-cancel",
+        },
+    )
+    assert resp_msft.status_code == 201
+
+    # GOOGL: 2,000 × $100 = $200,000 — total $1,100,000 > $1,000,000 → rejected
+    resp_bad = await client.post(
+        "/orders",
+        json={
+            "ticker": "GOOGL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 2_000,
+            "price": "100.00",
+            "account_id": "acc-notional-cancel",
+        },
+    )
+    assert resp_bad.status_code == 422
+    assert "Notional exposure limit exceeded" in resp_bad.json()["detail"]
+
+    # Cancel the AAPL order — total drops back to $450,000
+    await client.post(f"/orders/{aapl_order_id}/cancel")
+
+    # Now the GOOGL order passes: $450,000 + $200,000 = $650,000 < $1,000,000
+    resp_good = await client.post(
+        "/orders",
+        json={
+            "ticker": "GOOGL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 2_000,
+            "price": "100.00",
+            "account_id": "acc-notional-cancel",
+        },
+    )
+    assert resp_good.status_code == 201
+
+
+# ── Per-ticker notional exposure ──────────────────────────────────────────────
+
+
+async def test_per_ticker_notional_rejected_when_limit_exceeded(client):
+    """
+    $400k open in AAPL + $200k new order = $600k > $500k per-ticker limit → 422.
+    """
+    resp1 = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 4_000,
+            "price": "100.00",  # $400,000
+            "account_id": "acc-ticker",
+        },
+    )
+    assert resp1.status_code == 201
+
     resp2 = await client.post(
         "/orders",
         json={
@@ -264,23 +333,122 @@ async def test_api_cancel_reduces_notional_exposure(client):
             "side": "BUY",
             "order_type": "LIMIT",
             "quantity": 2_000,
-            "price": "100.00",
+            "price": "100.00",  # $200,000 → total $600,000 > $500,000
+            "account_id": "acc-ticker",
         },
     )
     assert resp2.status_code == 422
+    assert "Per-ticker notional limit exceeded" in resp2.json()["detail"]
 
-    # Cancel the first order — exposure drops back to $0
+
+async def test_per_ticker_notional_independent_across_tickers(client):
+    """
+    $400k in AAPL and $400k in MSFT are each within the $500k per-ticker limit.
+    """
+    resp1 = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 4_000,
+            "price": "100.00",  # $400,000 in AAPL
+            "account_id": "acc-two-tickers",
+        },
+    )
+    assert resp1.status_code == 201
+
+    resp2 = await client.post(
+        "/orders",
+        json={
+            "ticker": "MSFT",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 4_000,
+            "price": "100.00",  # $400,000 in MSFT — different ticker
+            "account_id": "acc-two-tickers",
+        },
+    )
+    assert resp2.status_code == 201
+
+
+async def test_per_ticker_notional_freed_after_cancel(client):
+    """
+    Cancelling a $400k AAPL order frees the exposure so another $400k order passes.
+    """
+    resp1 = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 4_000,
+            "price": "100.00",
+            "account_id": "acc-cancel-ticker",
+        },
+    )
+    assert resp1.status_code == 201
+    order_id = resp1.json()["order_id"]
+
     await client.post(f"/orders/{order_id}/cancel")
 
-    # Now the second order should pass
-    resp3 = await client.post(
+    resp2 = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 4_000,
+            "price": "100.00",
+            "account_id": "acc-cancel-ticker",
+        },
+    )
+    assert resp2.status_code == 201
+
+
+async def test_per_ticker_notional_reduced_after_fill(client):
+    """
+    After a $200k BUY fills against a resting SELL, the buyer's per-ticker
+    notional drops to $0 so a subsequent $400k order passes.
+    """
+    # Resting sell provides liquidity
+    await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "SELL",
+            "order_type": "LIMIT",
+            "quantity": 2_000,
+            "price": "100.00",
+            "account_id": "acc-sell-fill",
+        },
+    )
+
+    # Buy matches and fills — notional is reduced to $0 after fill
+    resp_buy = await client.post(
         "/orders",
         json={
             "ticker": "AAPL",
             "side": "BUY",
             "order_type": "LIMIT",
             "quantity": 2_000,
-            "price": "100.00",
+            "price": "100.00",  # $200,000 — fills immediately
+            "account_id": "acc-buy-fill",
         },
     )
-    assert resp3.status_code == 201
+    assert resp_buy.status_code == 201
+    assert resp_buy.json()["filled_quantity"] == 2_000
+
+    # Buyer's notional is back to $0 — $400k order should pass
+    resp2 = await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 4_000,
+            "price": "100.00",  # $400,000 < $500,000 limit
+            "account_id": "acc-buy-fill",
+        },
+    )
+    assert resp2.status_code == 201

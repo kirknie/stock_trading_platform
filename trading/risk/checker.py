@@ -1,15 +1,17 @@
 """
 Pre-trade risk checks.
 
-Enforces two limits before an order reaches the matching engine:
+Enforces three limits before an order reaches the matching engine:
 
 1. Position limit: net filled quantity per (account, ticker) <= MAX_POSITION_QUANTITY
 2. Notional exposure: total open LIMIT order value per account <= MAX_NOTIONAL_EXPOSURE
+3. Per-ticker notional: open LIMIT order value per (account, ticker) <= MAX_NOTIONAL_PER_TICKER
 
 The checker is stateful: it tracks confirmed fills and open orders.
 The consumer calls record_fill() and record_cancel() to keep state current.
 """
 
+from collections import defaultdict
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -17,6 +19,7 @@ from trading.events.models import Order, OrderType, Trade
 
 MAX_POSITION_QUANTITY: int = 10_000
 MAX_NOTIONAL_EXPOSURE: Decimal = Decimal("1_000_000")
+MAX_NOTIONAL_PER_TICKER: Decimal = Decimal("500_000")  # $500k per account per ticker
 MAX_SPREAD: Decimal = Decimal("50.00")
 
 
@@ -43,15 +46,21 @@ class RiskChecker:
         self,
         max_position: int = MAX_POSITION_QUANTITY,
         max_notional: Decimal = MAX_NOTIONAL_EXPOSURE,
+        max_notional_per_ticker: Decimal = MAX_NOTIONAL_PER_TICKER,
         max_spread: Decimal = MAX_SPREAD,
     ) -> None:
         self._max_position = max_position
         self._max_notional = max_notional
+        self._max_notional_per_ticker = max_notional_per_ticker
         self._max_spread = max_spread
         # account_id -> ticker -> confirmed net filled quantity
         self._positions: dict[str, dict[str, int]] = {}
         # account_id -> {(order_id, quantity, price)} for open LIMIT orders
         self._open_orders: dict[str, set[tuple[str, int, Decimal]]] = {}
+        # account_id -> ticker -> sum of qty * price for open LIMIT orders
+        self._ticker_notional: dict[str, dict[str, Decimal]] = defaultdict(
+            lambda: defaultdict(Decimal)
+        )
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -65,6 +74,7 @@ class RiskChecker:
         self._check_position_limit(order)
         if order.order_type == OrderType.LIMIT:
             self._check_notional_exposure(order)
+            self._check_ticker_notional_exposure(order)
 
     def check_market_spread(
         self,
@@ -106,6 +116,9 @@ class RiskChecker:
         self._open_orders.setdefault(order.account_id, set()).add(
             (order.order_id, order.quantity, price)
         )
+        self._ticker_notional[order.account_id][order.ticker] += (
+            Decimal(order.quantity) * price
+        )
 
     def record_fill(
         self, trade: Trade, buyer_account: str, seller_account: str
@@ -117,6 +130,15 @@ class RiskChecker:
         """
         self._add_position(buyer_account, trade.ticker, trade.quantity)
         self._add_position(seller_account, trade.ticker, -trade.quantity)
+        fill_notional = Decimal(trade.quantity) * trade.price
+        self._ticker_notional[buyer_account][trade.ticker] = max(
+            Decimal("0"),
+            self._ticker_notional[buyer_account][trade.ticker] - fill_notional,
+        )
+        self._ticker_notional[seller_account][trade.ticker] = max(
+            Decimal("0"),
+            self._ticker_notional[seller_account][trade.ticker] - fill_notional,
+        )
 
     def record_cancel(self, order: Order) -> None:
         """
@@ -129,6 +151,11 @@ class RiskChecker:
         price = order.price if order.price is not None else Decimal("0")
         self._open_orders.get(order.account_id, set()).discard(
             (order.order_id, order.quantity, price)
+        )
+        self._ticker_notional[order.account_id][order.ticker] = max(
+            Decimal("0"),
+            self._ticker_notional[order.account_id][order.ticker]
+            - Decimal(order.remaining_quantity()) * price,
         )
 
     def record_order_complete(self, order: Order) -> None:
@@ -149,6 +176,10 @@ class RiskChecker:
             (qty * price for _, qty, price in self._open_orders.get(account_id, set())),
             Decimal("0"),
         )
+
+    def get_ticker_notional(self, account_id: str, ticker: str) -> Decimal:
+        """Return the open LIMIT order notional for an (account, ticker) pair."""
+        return self._ticker_notional[account_id][ticker]
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
@@ -172,6 +203,20 @@ class RiskChecker:
                 f"Notional exposure limit exceeded for account '{order.account_id}': "
                 f"current={current_exposure}, order={order_notional}, "
                 f"projected={projected}, limit={self._max_notional}"
+            )
+
+    def _check_ticker_notional_exposure(self, order: Order) -> None:
+        if order.price is None:
+            return
+        current = self.get_ticker_notional(order.account_id, order.ticker)
+        order_notional = Decimal(order.quantity) * order.price
+        projected = current + order_notional
+        if projected > self._max_notional_per_ticker:
+            raise RiskViolation(
+                f"Per-ticker notional limit exceeded for {order.ticker} "
+                f"on account '{order.account_id}': "
+                f"current={current}, order={order_notional}, "
+                f"projected={projected}, limit={self._max_notional_per_ticker}"
             )
 
     def _add_position(self, account_id: str, ticker: str, delta: int) -> None:

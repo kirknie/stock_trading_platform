@@ -54,7 +54,8 @@ async def test_position_limit_enforced_after_restart(tmp_path, monkeypatch):
     monkeypatch.setenv("EVENT_LOG_PATH", str(tmp_path / "events.log"))
     monkeypatch.setenv("SNAPSHOT_PATH", str(tmp_path / "snapshot.json"))
 
-    # First lifespan: create a fill of 9,000 shares
+    # First lifespan: create a fill of 9,000 shares.
+    # Use price=$1 so notional ($9k) stays well under the per-ticker $500k limit.
     async with LifespanManager(app) as manager:
         async with AsyncClient(
             transport=ASGITransport(app=manager.app), base_url="http://test"
@@ -63,13 +64,13 @@ async def test_position_limit_enforced_after_restart(tmp_path, monkeypatch):
             await client.post(
                 "/orders",
                 json=make_limit_order(
-                    side="SELL", quantity=9_000, price="100.00", account_id="acc-sell"
+                    side="SELL", quantity=9_000, price="1.00", account_id="acc-sell"
                 ),
             )
             resp = await client.post(
                 "/orders",
                 json=make_limit_order(
-                    side="BUY", quantity=9_000, price="100.00", account_id="acc1"
+                    side="BUY", quantity=9_000, price="1.00", account_id="acc1"
                 ),
             )
             assert resp.status_code == 201
@@ -84,7 +85,7 @@ async def test_position_limit_enforced_after_restart(tmp_path, monkeypatch):
             resp = await client.post(
                 "/orders",
                 json=make_limit_order(
-                    side="BUY", quantity=2_000, price="100.00", account_id="acc1"
+                    side="BUY", quantity=2_000, price="1.00", account_id="acc1"
                 ),
             )
             assert resp.status_code == 422
@@ -105,13 +106,13 @@ async def test_position_limit_allows_order_within_remaining_after_restart(
             await client.post(
                 "/orders",
                 json=make_limit_order(
-                    side="SELL", quantity=5_000, price="100.00", account_id="acc-sell"
+                    side="SELL", quantity=5_000, price="1.00", account_id="acc-sell"
                 ),
             )
             await client.post(
                 "/orders",
                 json=make_limit_order(
-                    side="BUY", quantity=5_000, price="100.00", account_id="acc1"
+                    side="BUY", quantity=5_000, price="1.00", account_id="acc1"
                 ),
             )
 
@@ -122,7 +123,7 @@ async def test_position_limit_allows_order_within_remaining_after_restart(
             resp = await client.post(
                 "/orders",
                 json=make_limit_order(
-                    side="BUY", quantity=4_000, price="100.00", account_id="acc1"
+                    side="BUY", quantity=4_000, price="1.00", account_id="acc1"
                 ),
             )
             assert resp.status_code == 201
@@ -133,9 +134,9 @@ async def test_position_limit_allows_order_within_remaining_after_restart(
 
 async def test_notional_exposure_enforced_after_restart(tmp_path, monkeypatch):
     """
-    Submit a resting LIMIT buy for $900k, restart, then try to add $200k more.
-    Without recovery the notional check would pass (exposure looks like $0).
-    With recovery it must raise 422.
+    Submit resting LIMIT buys totalling $900k across two tickers, restart,
+    then try to add $200k more. Without recovery the total notional check
+    would pass (exposure looks like $0). With recovery it must raise 422.
     """
     monkeypatch.setenv("EVENT_LOG_PATH", str(tmp_path / "events.log"))
     monkeypatch.setenv("SNAPSHOT_PATH", str(tmp_path / "snapshot.json"))
@@ -144,24 +145,44 @@ async def test_notional_exposure_enforced_after_restart(tmp_path, monkeypatch):
         async with AsyncClient(
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
-            # $900,000 open — within $1M limit
-            resp = await client.post(
+            # $450k in AAPL + $450k in MSFT = $900k total (within $1M total limit,
+            # each within the $500k per-ticker limit)
+            resp1 = await client.post(
                 "/orders",
                 json=make_limit_order(
-                    side="BUY", quantity=9_000, price="100.00", account_id="acc1"
+                    ticker="AAPL",
+                    side="BUY",
+                    quantity=4_500,
+                    price="100.00",
+                    account_id="acc1",
                 ),
             )
-            assert resp.status_code == 201
+            assert resp1.status_code == 201
+            resp2 = await client.post(
+                "/orders",
+                json=make_limit_order(
+                    ticker="MSFT",
+                    side="BUY",
+                    quantity=4_500,
+                    price="100.00",
+                    account_id="acc1",
+                ),
+            )
+            assert resp2.status_code == 201
 
     async with LifespanManager(app) as manager:
         async with AsyncClient(
             transport=ASGITransport(app=manager.app), base_url="http://test"
         ) as client:
-            # $200,000 more → total $1,100,000 > $1,000,000
+            # $200,000 more (GOOGL) → total $1,100,000 > $1,000,000
             resp = await client.post(
                 "/orders",
                 json=make_limit_order(
-                    side="BUY", quantity=2_000, price="100.00", account_id="acc1"
+                    ticker="GOOGL",
+                    side="BUY",
+                    quantity=2_000,
+                    price="100.00",
+                    account_id="acc1",
                 ),
             )
             assert resp.status_code == 422
@@ -170,8 +191,8 @@ async def test_notional_exposure_enforced_after_restart(tmp_path, monkeypatch):
 
 async def test_notional_exposure_freed_after_cancel_and_restart(tmp_path, monkeypatch):
     """
-    Submit a $900k order, cancel it, restart — notional exposure must be $0
-    so a new $900k order is accepted.
+    Submit a $450k order, cancel it, restart — notional exposure must be $0
+    so a new $450k order is accepted.
     """
     monkeypatch.setenv("EVENT_LOG_PATH", str(tmp_path / "events.log"))
     monkeypatch.setenv("SNAPSHOT_PATH", str(tmp_path / "snapshot.json"))
@@ -183,7 +204,7 @@ async def test_notional_exposure_freed_after_cancel_and_restart(tmp_path, monkey
             resp = await client.post(
                 "/orders",
                 json=make_limit_order(
-                    side="BUY", quantity=9_000, price="100.00", account_id="acc1"
+                    side="BUY", quantity=4_500, price="100.00", account_id="acc1"
                 ),
             )
             order_id = resp.json()["order_id"]
@@ -198,7 +219,7 @@ async def test_notional_exposure_freed_after_cancel_and_restart(tmp_path, monkey
             resp = await client.post(
                 "/orders",
                 json=make_limit_order(
-                    side="BUY", quantity=9_000, price="100.00", account_id="acc1"
+                    side="BUY", quantity=4_500, price="100.00", account_id="acc1"
                 ),
             )
             assert resp.status_code == 201
@@ -215,6 +236,7 @@ async def test_position_rebuilt_independently_per_account(tmp_path, monkeypatch)
     monkeypatch.setenv("EVENT_LOG_PATH", str(tmp_path / "events.log"))
     monkeypatch.setenv("SNAPSHOT_PATH", str(tmp_path / "snapshot.json"))
 
+    # Use price=$1 so notional ($9k) stays well under the per-ticker $500k limit.
     async with LifespanManager(app) as manager:
         async with AsyncClient(
             transport=ASGITransport(app=manager.app), base_url="http://test"
@@ -225,7 +247,7 @@ async def test_position_rebuilt_independently_per_account(tmp_path, monkeypatch)
                     ticker="MSFT",
                     side="SELL",
                     quantity=9_000,
-                    price="100.00",
+                    price="1.00",
                     account_id="acc-sell",
                 ),
             )
@@ -235,7 +257,7 @@ async def test_position_rebuilt_independently_per_account(tmp_path, monkeypatch)
                     ticker="MSFT",
                     side="BUY",
                     quantity=9_000,
-                    price="100.00",
+                    price="1.00",
                     account_id="acc1",
                 ),
             )
@@ -251,7 +273,7 @@ async def test_position_rebuilt_independently_per_account(tmp_path, monkeypatch)
                     ticker="MSFT",
                     side="BUY",
                     quantity=2_000,
-                    price="100.00",
+                    price="1.00",
                     account_id="acc1",
                 ),
             )
@@ -264,7 +286,7 @@ async def test_position_rebuilt_independently_per_account(tmp_path, monkeypatch)
                     ticker="MSFT",
                     side="BUY",
                     quantity=9_000,
-                    price="100.00",
+                    price="1.00",
                     account_id="acc2",
                 ),
             )
