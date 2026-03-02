@@ -270,6 +270,30 @@ async def test_parent_directory_created_automatically(tmp_path: Path):
     assert nested_path.exists()
 
 
+async def test_sequence_continues_after_reinit(tmp_path: Path):
+    """
+    A new EventLog instance pointing at an existing log file must continue
+    sequence numbering from the last written seq, not restart from 1.
+    """
+    log1 = EventLog(path=tmp_path / "events.log")
+    seq1 = await log1.append_order_submitted(make_order("O-1"))
+    seq2 = await log1.append_trade_executed(make_trade("T-1"), "acc1", "acc2")
+    assert seq1 == 1
+    assert seq2 == 2
+
+    # Simulate restart: new instance, same file
+    log2 = EventLog(path=tmp_path / "events.log")
+    seq3 = await log2.append_order_cancelled("O-1", "AAPL")
+    assert seq3 == 3  # continues from 2, not restarts at 1
+
+
+async def test_sequence_init_on_empty_file(tmp_path: Path):
+    """A new EventLog on a fresh path starts sequence at 1."""
+    log = EventLog(path=tmp_path / "new.log")
+    seq = await log.append_order_submitted(make_order())
+    assert seq == 1
+
+
 # ── SnapshotManager helpers ───────────────────────────────────────────────────
 
 

@@ -43,7 +43,30 @@ class EventLog:
             else Path(os.getenv("EVENT_LOG_PATH", "data/events.log"))
         )
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._sequence: int = 0
+        self._sequence: int = self._read_max_sequence()
+
+    def _read_max_sequence(self) -> int:
+        """
+        Scan the existing log file and return the highest seq value found.
+
+        Called once at init so that new events written after a restart continue
+        from the correct sequence number rather than restarting from 1.
+        Returns 0 if the file does not exist or contains no valid events.
+        """
+        if not self._path.exists():
+            return 0
+        max_seq = 0
+        with open(self._path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        seq = json.loads(line).get("seq", 0)
+                        if seq > max_seq:
+                            max_seq = seq
+                    except json.JSONDecodeError:
+                        continue
+        return max_seq
 
     async def append_order_submitted(self, order: Order) -> int:
         """Log an order submission. Returns the sequence number assigned."""
