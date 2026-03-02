@@ -5,7 +5,8 @@ Throughput benchmark for the trading platform REST API.
 Measures:
 1. Single-ticker orders/sec (AAPL only)
 2. Multi-ticker orders/sec (all 5 tickers, interleaved)
-3. Latency distribution (p50, p95, p99)
+3. Matched orders (alternating SELL/BUY pairs at same price — every BUY trades)
+4. Latency distribution (p50, p95, p99)
 
 Run:
     # Start server first:
@@ -23,7 +24,7 @@ from decimal import Decimal
 
 import httpx
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "http://127.0.0.1:8000"
 TICKERS = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA"]
 WARMUP_ORDERS = 50
 BENCHMARK_ORDERS = 500
@@ -57,18 +58,18 @@ async def run_benchmark(
 ) -> dict:
     """Run a batch of orders concurrently and collect latency stats."""
     async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
-        # Warmup: let the server JIT-warm before measuring
-        warmup = payloads[:WARMUP_ORDERS]
-        await asyncio.gather(*[send_order(client, p) for p in warmup])
-
-        # Benchmark: bounded concurrency via semaphore
-        bench = payloads[WARMUP_ORDERS:]
         semaphore = asyncio.Semaphore(concurrency)
 
         async def bounded_send(payload: dict) -> float:
             async with semaphore:
                 return await send_order(client, payload)
 
+        # Warmup: let the server JIT-warm before measuring
+        warmup = payloads[:WARMUP_ORDERS]
+        await asyncio.gather(*[bounded_send(p) for p in warmup])
+
+        # Benchmark
+        bench = payloads[WARMUP_ORDERS:]
         start_wall = time.perf_counter()
         latencies: list[float] = await asyncio.gather(*[bounded_send(p) for p in bench])
         wall_time = time.perf_counter() - start_wall
@@ -84,6 +85,66 @@ async def run_benchmark(
         "latency_p50_ms": round(statistics.median(sorted_lat), 2),
         "latency_p95_ms": round(sorted_lat[int(n * 0.95)], 2),
         "latency_p99_ms": round(sorted_lat[int(n * 0.99)], 2),
+        "latency_min_ms": round(sorted_lat[0], 2),
+        "latency_max_ms": round(sorted_lat[-1], 2),
+    }
+
+
+async def run_matched_benchmark(
+    name: str,
+    n: int = BENCHMARK_ORDERS,
+    concurrency: int = CONCURRENCY,
+) -> dict:
+    """
+    Submit N/2 SELL orders first (they rest), then N/2 BUY orders at the same
+    price — every BUY matches a resting SELL.
+
+    Sends the two phases sequentially so all SELLs are in the book before
+    any BUY arrives, guaranteeing a trade on every BUY.
+    """
+    ticker = "AAPL"
+    price = "150.00"
+    half_warmup = WARMUP_ORDERS // 2
+
+    async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def bounded_send(payload: dict) -> float:
+            async with semaphore:
+                return await send_order(client, payload)
+
+        # Warmup: SELLs then BUYs
+        warmup_sells = [make_limit_order(ticker, price, side="SELL") for _ in range(half_warmup)]
+        warmup_buys = [make_limit_order(ticker, price, side="BUY") for _ in range(half_warmup)]
+        await asyncio.gather(*[bounded_send(p) for p in warmup_sells])
+        await asyncio.gather(*[bounded_send(p) for p in warmup_buys])
+
+        # Benchmark: half SELLs then half BUYs
+        half = n // 2
+        sell_payloads = [make_limit_order(ticker, price, side="SELL") for _ in range(half)]
+        buy_payloads = [make_limit_order(ticker, price, side="BUY") for _ in range(half)]
+
+        start_wall = time.perf_counter()
+        sell_latencies: list[float] = await asyncio.gather(
+            *[bounded_send(p) for p in sell_payloads]
+        )
+        buy_latencies: list[float] = await asyncio.gather(
+            *[bounded_send(p) for p in buy_payloads]
+        )
+        wall_time = time.perf_counter() - start_wall
+
+    latencies = list(sell_latencies) + list(buy_latencies)
+    sorted_lat = sorted(latencies)
+    n_total = len(latencies)
+
+    return {
+        "name": name,
+        "total_orders": n_total,
+        "wall_time_sec": round(wall_time, 3),
+        "orders_per_sec": round(n_total / wall_time, 1),
+        "latency_p50_ms": round(statistics.median(sorted_lat), 2),
+        "latency_p95_ms": round(sorted_lat[int(n_total * 0.95)], 2),
+        "latency_p99_ms": round(sorted_lat[int(n_total * 0.99)], 2),
         "latency_min_ms": round(sorted_lat[0], 2),
         "latency_max_ms": round(sorted_lat[-1], 2),
     }
@@ -121,11 +182,14 @@ async def main() -> None:
     ]
     result2 = await run_benchmark("Multi-ticker (5 tickers)", multi_payloads)
 
+    # Benchmark 3: Matched orders — every BUY generates a trade
+    result3 = await run_matched_benchmark("Matched orders (AAPL, trade per BUY)")
+
     # Print results table
     print("\n" + "=" * 60)
     print("THROUGHPUT BENCHMARK RESULTS")
     print("=" * 60)
-    for result in [result1, result2]:
+    for result in [result1, result2, result3]:
         print(f"\n{result['name']}")
         print(f"  Orders processed : {result['total_orders']}")
         print(f"  Wall time        : {result['wall_time_sec']}s")
