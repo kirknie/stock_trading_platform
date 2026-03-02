@@ -19,7 +19,7 @@ from trading.api.dependencies import (
     get_engine,
     get_event_log,
     get_idempotency_store,
-    get_order_queue,
+    get_order_queues,
     get_risk,
 )
 from trading.api.dependencies import IdempotencyStore
@@ -92,7 +92,7 @@ def _build_order_book_response(
 async def submit_order(
     request: OrderRequest,
     engine: MatchingEngine = Depends(get_engine),
-    queue: asyncio.Queue = Depends(get_order_queue),
+    queues: dict[str, asyncio.Queue] = Depends(get_order_queues),
     idempotency: IdempotencyStore = Depends(get_idempotency_store),
     event_log: EventLog = Depends(get_event_log),
 ) -> OrderResponse | JSONResponse:
@@ -134,7 +134,7 @@ async def submit_order(
     # Enqueue order and await result from consumer
     loop = asyncio.get_event_loop()
     future: asyncio.Future = loop.create_future()
-    await queue.put((order, future))
+    await queues[order.ticker].put((order, future))
     try:
         trades = await future
     except RiskViolation as exc:

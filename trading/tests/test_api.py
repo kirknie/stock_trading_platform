@@ -328,3 +328,40 @@ async def test_cancel_already_filled_order(client):
     cancel = await client.post(f"/orders/{order_id}/cancel")
     assert cancel.status_code == 200
     assert cancel.json()["success"] is False
+
+
+async def test_orders_on_different_tickers_do_not_interfere(client):
+    """Per-ticker queues: an order on AAPL must not appear in the MSFT book."""
+    await client.post(
+        "/orders",
+        json={
+            "ticker": "AAPL",
+            "side": "BUY",
+            "order_type": "LIMIT",
+            "quantity": 50,
+            "price": "150.00",
+        },
+    )
+    await client.post(
+        "/orders",
+        json={
+            "ticker": "MSFT",
+            "side": "SELL",
+            "order_type": "LIMIT",
+            "quantity": 30,
+            "price": "310.00",
+        },
+    )
+
+    aapl = (await client.get("/book/AAPL")).json()
+    msft = (await client.get("/book/MSFT")).json()
+
+    # AAPL book has exactly one bid, no asks
+    assert len(aapl["bids"]) == 1
+    assert aapl["bids"][0]["quantity"] == 50
+    assert aapl["asks"] == []
+
+    # MSFT book has exactly one ask, no bids
+    assert len(msft["asks"]) == 1
+    assert msft["asks"][0]["quantity"] == 30
+    assert msft["bids"] == []

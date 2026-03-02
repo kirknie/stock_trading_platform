@@ -18,7 +18,7 @@ SUPPORTED_TICKERS = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA"]
 
 # Module-level singletons initialized at startup
 _engine: MatchingEngine | None = None
-_order_queue: asyncio.Queue | None = None
+_order_queues: dict[str, asyncio.Queue] | None = None
 _risk: RiskChecker | None = None
 _event_log: EventLog | None = None
 _snapshot_manager: SnapshotManager | None = None
@@ -79,11 +79,11 @@ def get_engine() -> MatchingEngine:
     return _engine
 
 
-def get_order_queue() -> asyncio.Queue:
-    """Return the shared async order queue."""
-    if _order_queue is None:
-        raise RuntimeError("Queue not initialized. Call init_app_state() first.")
-    return _order_queue
+def get_order_queues() -> dict[str, asyncio.Queue]:
+    """Return the per-ticker order queues."""
+    if _order_queues is None:
+        raise RuntimeError("Queues not initialized. Call init_app_state() first.")
+    return _order_queues
 
 
 def get_risk() -> RiskChecker:
@@ -119,19 +119,19 @@ def get_idempotency_store() -> IdempotencyStore:
 
 
 def init_app_state() -> (
-    tuple[MatchingEngine, asyncio.Queue, RiskChecker, EventLog, SnapshotManager]
+    tuple[MatchingEngine, dict[str, asyncio.Queue], RiskChecker, EventLog, SnapshotManager]
 ):
     """
     Initialize shared application state.
 
     Called once during FastAPI lifespan startup.
-    Returns (engine, queue, risk, event_log, snapshot_manager) for use in main.py.
+    Returns (engine, queues, risk, event_log, snapshot_manager) for use in main.py.
     """
-    global _engine, _order_queue, _risk, _event_log, _snapshot_manager, _idempotency_store
+    global _engine, _order_queues, _risk, _event_log, _snapshot_manager, _idempotency_store
     _engine = MatchingEngine(SUPPORTED_TICKERS)
-    _order_queue = asyncio.Queue()
+    _order_queues = {ticker: asyncio.Queue() for ticker in SUPPORTED_TICKERS}
     _risk = RiskChecker()
     _event_log = EventLog()
     _snapshot_manager = SnapshotManager()
     _idempotency_store = IdempotencyStore()
-    return _engine, _order_queue, _risk, _event_log, _snapshot_manager
+    return _engine, _order_queues, _risk, _event_log, _snapshot_manager

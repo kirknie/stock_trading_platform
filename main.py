@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize resources on startup; clean up on shutdown."""
-    engine, queue, risk, event_log, snapshot_mgr = init_app_state()
+    engine, queues, risk, event_log, snapshot_mgr = init_app_state()
     broadcaster = init_broadcaster()
 
     # ── Startup: restore snapshot then replay event log ───────────────────────
@@ -71,10 +71,16 @@ async def lifespan(app: FastAPI):
     logger.info("Initial registry eviction complete")
 
     # ── Background tasks ──────────────────────────────────────────────────────
-    consumer_task = asyncio.create_task(
-        consumer.run_consumer(engine, queue, broadcaster, risk, event_log),
-        name="order-consumer",
-    )
+    # One consumer per ticker — orders for different tickers processed concurrently.
+    # RiskChecker methods have no internal awaits so cannot interleave between
+    # consumers; no lock needed (cooperative multitasking guarantee).
+    consumer_tasks = [
+        asyncio.create_task(
+            consumer.run_consumer(engine, queues[ticker], broadcaster, risk, event_log),
+            name=f"order-consumer-{ticker}",
+        )
+        for ticker in engine.get_supported_tickers()
+    ]
     snapshot_task = asyncio.create_task(
         _periodic_snapshot(engine, event_log, snapshot_mgr),
         name="snapshot",
@@ -84,8 +90,9 @@ async def lifespan(app: FastAPI):
 
     # ── Shutdown: cancel tasks then write final snapshot ──────────────────────
     snapshot_task.cancel()
-    consumer_task.cancel()
-    for task in [snapshot_task, consumer_task]:
+    for task in consumer_tasks:
+        task.cancel()
+    for task in [snapshot_task, *consumer_tasks]:
         try:
             await task
         except asyncio.CancelledError:
