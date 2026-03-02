@@ -58,11 +58,14 @@ async def lifespan(app: FastAPI):
         logger.info("Restored from snapshot at sequence %d", replay_after)
 
     async for event in event_log.read_all(after_sequence=replay_after):
-        _replay_event(engine, event, idempotency=get_idempotency_store())
+        _replay_event(engine, event)
     logger.info("Event log replay complete")
 
     await _rebuild_risk(risk, engine, event_log)
     logger.info("Risk state rebuilt")
+
+    await _rebuild_idempotency(get_idempotency_store(), event_log)
+    logger.info("Idempotency cache rebuilt")
 
     engine.evict_stale_registry()
     logger.info("Initial registry eviction complete")
@@ -92,19 +95,14 @@ async def lifespan(app: FastAPI):
     logger.info("Final snapshot saved on shutdown")
 
 
-def _replay_event(
-    engine: MatchingEngine,
-    event: dict,
-    idempotency: IdempotencyStore | None = None,
-) -> None:
+def _replay_event(engine: MatchingEngine, event: dict) -> None:
     """
     Re-apply a single logged event to rebuild in-memory engine state.
 
     order_submitted and order_cancelled rebuild the engine book.
-    idempotency_cached restores the idempotency cache (if store provided).
     trade_executed events are skipped — trades are regenerated naturally
-    by submit_order() during replay. Risk state is rebuilt separately by
-    _rebuild_risk().
+    by submit_order() during replay. Risk and idempotency state are rebuilt
+    separately by _rebuild_risk() and _rebuild_idempotency().
     """
     if event["event"] == "order_submitted":
         od = event["order"]
@@ -124,13 +122,6 @@ def _replay_event(
 
     elif event["event"] == "order_cancelled":
         engine.cancel_order(event["order_id"])
-
-    elif event["event"] == "idempotency_cached" and idempotency is not None:
-        idempotency.restore(
-            order_id=event["order_id"],
-            response=event["response"],
-            expires_at=event["expires_at"],
-        )
 
 
 async def _rebuild_risk(
@@ -175,6 +166,27 @@ async def _rebuild_risk(
             trade,
             buyer_account=event["buyer_account"],
             seller_account=event["seller_account"],
+        )
+
+
+async def _rebuild_idempotency(
+    idempotency: IdempotencyStore,
+    event_log: EventLog,
+) -> None:
+    """
+    Rebuild IdempotencyStore from all idempotency_cached events in the log.
+
+    Always reads from seq=0 — the snapshot does not capture idempotency state,
+    so all events must be replayed regardless of the snapshot sequence.
+    Expired entries are silently dropped by IdempotencyStore.restore().
+    """
+    async for event in event_log.read_all(after_sequence=0):
+        if event["event"] != "idempotency_cached":
+            continue
+        idempotency.restore(
+            order_id=event["order_id"],
+            response=event["response"],
+            expires_at=event["expires_at"],
         )
 
 
