@@ -150,7 +150,10 @@ class EventLog:
             async for line in f:
                 line = line.strip()
                 if line:
-                    event = json.loads(line)
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
                     if event.get("seq", 0) > after_sequence:
                         yield event
 
