@@ -12,7 +12,6 @@ Event types:
 """
 
 import json
-import logging
 import os
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
@@ -21,10 +20,11 @@ from pathlib import Path
 from typing import Any
 
 import aiofiles
+import structlog
 
 from trading.events.models import Order, Trade
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 class EventLog:

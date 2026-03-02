@@ -10,14 +10,15 @@ Protocol:
 
 import asyncio
 import json
-import logging
+
+import structlog
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from trading.api.broadcaster import get_broadcaster
 from trading.metrics.collector import active_ws_connections
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 ws_router = APIRouter()
 
 

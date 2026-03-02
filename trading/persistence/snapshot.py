@@ -12,19 +12,20 @@ If no snapshot exists, replay the entire event log from seq 0.
 """
 
 import json
-import logging
 import os
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import structlog
+
 import aiofiles
 
 from trading.engine.matcher import MatchingEngine
 from trading.events.models import Order, OrderSide, OrderStatus, OrderType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 SNAPSHOT_VERSION = 1

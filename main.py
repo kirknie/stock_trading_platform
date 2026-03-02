@@ -22,14 +22,17 @@ Shutdown sequence:
 """
 
 import asyncio
-import logging
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from decimal import Decimal
 
+import structlog
 from fastapi import FastAPI
 from fastapi.responses import Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from trading.api import consumer
 from trading.api.broadcaster import init_broadcaster
@@ -42,11 +45,13 @@ from trading.api.routes import router
 from trading.api.websocket import ws_router
 from trading.engine.matcher import MatchingEngine
 from trading.events.models import Order, OrderSide, OrderStatus, OrderType, Trade
+from trading.logging_config import configure_logging
 from trading.persistence.event_log import EventLog
 from trading.persistence.snapshot import SnapshotManager
 from trading.risk.checker import RiskChecker
 
-logger = logging.getLogger(__name__)
+configure_logging()
+logger = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
@@ -227,6 +232,19 @@ app = FastAPI(
 
 app.include_router(router)
 app.include_router(ws_router)
+
+
+class RequestIdMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        structlog.contextvars.clear_contextvars()
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+app.add_middleware(RequestIdMiddleware)
 
 
 @app.get("/metrics", include_in_schema=False)

@@ -361,7 +361,6 @@ uv add structlog
 ```
 
 This adds `structlog` to `[project.dependencies]` in `pyproject.toml` automatically.
-```
 
 ### Step 3.2 — Create `trading/logging_config.py`
 

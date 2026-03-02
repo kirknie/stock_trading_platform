@@ -12,7 +12,8 @@ Why a queue?
 """
 
 import asyncio
-import logging
+
+import structlog
 
 from trading.api.broadcaster import Broadcaster
 from trading.engine.matcher import MatchingEngine
@@ -21,7 +22,7 @@ from trading.metrics.collector import queue_depth
 from trading.persistence.event_log import EventLog
 from trading.risk.checker import RiskChecker, RiskViolation
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 async def run_consumer(

@@ -8,11 +8,12 @@ to push updates to subscribed clients.
 
 import asyncio
 import json
-import logging
 from decimal import Decimal
 from typing import Any
 
-logger = logging.getLogger(__name__)
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 
 class Broadcaster:
