@@ -41,6 +41,7 @@ from trading.api.dependencies import (
     get_idempotency_store,
     init_app_state,
 )
+from trading.api.health import health_router
 from trading.api.routes import router
 from trading.api.websocket import ws_router
 from trading.engine.matcher import MatchingEngine
@@ -232,6 +233,7 @@ app = FastAPI(
 
 app.include_router(router)
 app.include_router(ws_router)
+app.include_router(health_router)
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
