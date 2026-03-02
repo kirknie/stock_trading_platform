@@ -88,6 +88,15 @@ async def run_consumer(
 
                 future.set_result(trades)
 
+                # Notify subscribers: order lifecycle status
+                await broadcaster.notify_order_status(
+                    order_id=order.order_id,
+                    ticker=order.ticker,
+                    status=order.status.value,
+                    filled_quantity=order.filled_quantity,
+                    remaining_quantity=order.remaining_quantity(),
+                )
+
                 # Notify subscribers: book update for the ticker
                 book = engine.manager.get_order_book(order.ticker)
                 await broadcaster.notify_book_update(

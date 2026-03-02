@@ -23,6 +23,7 @@ from trading.api.dependencies import (
     get_order_queues,
     get_risk,
 )
+from trading.api.broadcaster import get_broadcaster
 from trading.api.dependencies import IdempotencyStore
 from trading.persistence.event_log import EventLog
 from trading.risk.checker import RiskChecker, RiskViolation
@@ -218,6 +219,13 @@ async def cancel_order(
         _, order = ticker_and_order
         risk.record_cancel(order)
         await event_log.append_order_cancelled(order_id, order.ticker)
+        await get_broadcaster().notify_order_status(
+            order_id=order_id,
+            ticker=order.ticker,
+            status="CANCELED",
+            filled_quantity=order.filled_quantity,
+            remaining_quantity=0,
+        )
     return CancelResponse(
         order_id=order_id,
         success=success,

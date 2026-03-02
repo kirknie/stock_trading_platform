@@ -69,11 +69,21 @@ async def test_websocket_book_update_on_order(managed_app, client):
                     },
                 )
 
-                msg = json.loads(await asyncio.wait_for(ws.receive_text(), timeout=2.0))
-                assert msg["type"] == "book_update"
-                assert msg["ticker"] == "AAPL"
-                assert msg["best_ask"] == "150.00"
-                assert msg["best_bid"] is None
+                # Collect messages until we find the book_update event
+                book_msg = None
+                for _ in range(5):
+                    msg = json.loads(
+                        await asyncio.wait_for(ws.receive_text(), timeout=2.0)
+                    )
+                    if msg["type"] == "book_update":
+                        book_msg = msg
+                        break
+
+                assert book_msg is not None
+                assert book_msg["type"] == "book_update"
+                assert book_msg["ticker"] == "AAPL"
+                assert book_msg["best_ask"] == "150.00"
+                assert book_msg["best_bid"] is None
 
 
 async def test_websocket_trade_event_on_match(managed_app, client):
@@ -177,3 +187,97 @@ async def test_websocket_invalid_subscription(managed_app, client):
                 await ws.send_text(json.dumps({"action": "invalid"}))
                 msg = json.loads(await ws.receive_text())
                 assert "error" in msg
+
+
+async def test_order_status_event_received_on_fill(managed_app, client):
+    """Filling an order emits an order_status event with status FILLED."""
+    async with ASGIWebSocketTransport(app=managed_app) as transport:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as ws_client:
+            async with aconnect_ws("http://test/ws", ws_client) as ws:
+                await ws.send_text(
+                    json.dumps({"action": "subscribe", "tickers": ["NVDA"]})
+                )
+                await ws.receive_text()  # ack
+
+                # Place resting SELL
+                await client.post(
+                    "/orders",
+                    json={
+                        "ticker": "NVDA",
+                        "side": "SELL",
+                        "order_type": "LIMIT",
+                        "quantity": 10,
+                        "price": "500.00",
+                    },
+                )
+                await ws.receive_text()  # order_status (OPEN)
+                await ws.receive_text()  # book_update
+
+                # Place matching BUY — triggers fill
+                resp = await client.post(
+                    "/orders",
+                    json={
+                        "ticker": "NVDA",
+                        "side": "BUY",
+                        "order_type": "LIMIT",
+                        "quantity": 10,
+                        "price": "500.00",
+                    },
+                )
+                assert resp.json()["filled_quantity"] == 10
+
+                # Collect messages until we find order_status with FILLED
+                status_msg = None
+                for _ in range(10):
+                    msg = json.loads(
+                        await asyncio.wait_for(ws.receive_text(), timeout=2.0)
+                    )
+                    if msg["type"] == "order_status" and msg["status"] == "FILLED":
+                        status_msg = msg
+                        break
+
+                assert status_msg is not None
+                assert status_msg["ticker"] == "NVDA"
+                assert status_msg["filled_quantity"] == 10
+                assert status_msg["remaining_quantity"] == 0
+
+
+async def test_order_status_event_received_on_cancel(managed_app, client):
+    """Cancelling a resting order emits an order_status event with status CANCELED."""
+    async with ASGIWebSocketTransport(app=managed_app) as transport:
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as ws_client:
+            async with aconnect_ws("http://test/ws", ws_client) as ws:
+                await ws.send_text(
+                    json.dumps({"action": "subscribe", "tickers": ["TSLA"]})
+                )
+                await ws.receive_text()  # ack
+
+                # Place a resting BUY
+                resp = await client.post(
+                    "/orders",
+                    json={
+                        "ticker": "TSLA",
+                        "side": "BUY",
+                        "order_type": "LIMIT",
+                        "quantity": 5,
+                        "price": "200.00",
+                    },
+                )
+                order_id = resp.json()["order_id"]
+                await ws.receive_text()  # order_status (OPEN)
+                await ws.receive_text()  # book_update
+
+                # Cancel it
+                await client.post(f"/orders/{order_id}/cancel")
+
+                msg = json.loads(
+                    await asyncio.wait_for(ws.receive_text(), timeout=2.0)
+                )
+                assert msg["type"] == "order_status"
+                assert msg["status"] == "CANCELED"
+                assert msg["ticker"] == "TSLA"
+                assert msg["order_id"] == order_id

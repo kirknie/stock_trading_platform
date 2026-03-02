@@ -85,6 +85,26 @@ class Broadcaster:
             },
         )
 
+    async def notify_order_status(
+        self,
+        order_id: str,
+        ticker: str,
+        status: str,
+        filled_quantity: int,
+        remaining_quantity: int,
+    ) -> None:
+        await self.broadcast(
+            ticker,
+            {
+                "type": "order_status",
+                "order_id": order_id,
+                "ticker": ticker,
+                "status": status,
+                "filled_quantity": filled_quantity,
+                "remaining_quantity": remaining_quantity,
+            },
+        )
+
 
 def _decimal_default(obj: Any) -> str:
     """JSON serializer for Decimal values."""
