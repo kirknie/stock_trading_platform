@@ -94,6 +94,7 @@ async def submit_order(
     engine: MatchingEngine = Depends(get_engine),
     queue: asyncio.Queue = Depends(get_order_queue),
     idempotency: IdempotencyStore = Depends(get_idempotency_store),
+    event_log: EventLog = Depends(get_event_log),
 ) -> OrderResponse | JSONResponse:
     """
     Submit a limit or market order.
@@ -165,9 +166,11 @@ async def submit_order(
         ],
     )
 
-    # Cache for future duplicate submissions
+    # Cache for future duplicate submissions and persist to event log
     if request.order_id is not None:
-        idempotency.store(request.order_id, response.model_dump(mode="json"))
+        response_dict = response.model_dump(mode="json")
+        idempotency.store(request.order_id, response_dict)
+        await event_log.append_idempotency_cached(request.order_id, response_dict)
 
     return response
 

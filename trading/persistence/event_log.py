@@ -5,16 +5,17 @@ Every domain event is written as a JSON line (NDJSON) to a log file.
 The log is the authoritative record for snapshot + replay recovery.
 
 Event types:
-  order_submitted — recorded after risk checks pass, before submit_order()
-  trade_executed  — recorded once per trade
-  order_cancelled — recorded after a successful cancellation
+  order_submitted      — recorded after risk checks pass, before submit_order()
+  trade_executed       — recorded once per trade
+  order_cancelled      — recorded after a successful cancellation
+  idempotency_cached   — recorded when a new order_id is cached; includes expires_at
 """
 
 import json
 import logging
 import os
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -84,6 +85,31 @@ class EventLog:
                 "ts": _now(),
                 "order_id": order_id,
                 "ticker": ticker,
+            }
+        )
+        return seq
+
+    async def append_idempotency_cached(
+        self, order_id: str, response: dict[str, Any], ttl_hours: int = 24
+    ) -> int:
+        """
+        Log a cached idempotency response. Returns the sequence number assigned.
+
+        The expires_at field allows the restore path to drop entries that have
+        already expired, preventing unbounded cache growth across restarts.
+        """
+        seq = self._next_seq()
+        expires_at = (
+            datetime.now(tz=timezone.utc) + timedelta(hours=ttl_hours)
+        ).isoformat()
+        await self._write(
+            {
+                "event": "idempotency_cached",
+                "seq": seq,
+                "ts": _now(),
+                "order_id": order_id,
+                "response": response,
+                "expires_at": expires_at,
             }
         )
         return seq

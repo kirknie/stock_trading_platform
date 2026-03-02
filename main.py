@@ -31,7 +31,7 @@ from fastapi import FastAPI
 
 from trading.api import consumer
 from trading.api.broadcaster import init_broadcaster
-from trading.api.dependencies import init_app_state
+from trading.api.dependencies import IdempotencyStore, get_idempotency_store, init_app_state
 from trading.api.routes import router
 from trading.api.websocket import ws_router
 from trading.engine.matcher import MatchingEngine
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
         logger.info("Restored from snapshot at sequence %d", replay_after)
 
     async for event in event_log.read_all(after_sequence=replay_after):
-        _replay_event(engine, event)
+        _replay_event(engine, event, idempotency=get_idempotency_store())
     logger.info("Event log replay complete")
 
     await _rebuild_risk(risk, engine, event_log)
@@ -92,13 +92,19 @@ async def lifespan(app: FastAPI):
     logger.info("Final snapshot saved on shutdown")
 
 
-def _replay_event(engine: MatchingEngine, event: dict) -> None:
+def _replay_event(
+    engine: MatchingEngine,
+    event: dict,
+    idempotency: IdempotencyStore | None = None,
+) -> None:
     """
     Re-apply a single logged event to rebuild in-memory engine state.
 
-    Only order_submitted and order_cancelled are replayed — trade_executed
-    events are a consequence of submit_order() and are generated naturally
-    during replay. Risk state is rebuilt separately by _rebuild_risk().
+    order_submitted and order_cancelled rebuild the engine book.
+    idempotency_cached restores the idempotency cache (if store provided).
+    trade_executed events are skipped — trades are regenerated naturally
+    by submit_order() during replay. Risk state is rebuilt separately by
+    _rebuild_risk().
     """
     if event["event"] == "order_submitted":
         od = event["order"]
@@ -118,6 +124,13 @@ def _replay_event(engine: MatchingEngine, event: dict) -> None:
 
     elif event["event"] == "order_cancelled":
         engine.cancel_order(event["order_id"])
+
+    elif event["event"] == "idempotency_cached" and idempotency is not None:
+        idempotency.restore(
+            order_id=event["order_id"],
+            response=event["response"],
+            expires_at=event["expires_at"],
+        )
 
 
 async def _rebuild_risk(
