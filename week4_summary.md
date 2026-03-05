@@ -249,7 +249,7 @@ main.py                       (+_rebuild_risk, _rebuild_idempotency, per-ticker 
 
 ## Validation Checklist
 
-- [x] 194 tests pass (`pytest trading/tests/ -q`)
+- [x] 215 tests pass (`pytest trading/tests/ -q`)
 - [x] mypy clean (`mypy trading/ --ignore-missing-imports`)
 - [x] Smoke test: risk state enforced after restart (position limit, notional exposure)
 - [x] Smoke test: idempotent order returns HTTP 200 after restart
@@ -260,13 +260,15 @@ main.py                       (+_rebuild_risk, _rebuild_idempotency, per-ticker 
 
 ## Resume Bullet
 
-> "Hardened a Python asyncio trading platform for crash recovery: embedded buyer/seller
-> accounts in trade events to enable stateless risk rebuilding on restart; added TTL-based
-> order registry eviction to cap memory growth; persisted the idempotency cache in the
-> append-only event log with 24-hour TTL; sharded the order queue by ticker for concurrent
-> matching across symbols; and fixed a sequence counter bug that caused event log collisions
-> after restart. Grew the test suite from 171 to 194 tests including full restart simulation
-> via sequential LifespanManager blocks."
+> "Built a production-grade Python asyncio trading backend: price-time priority limit/market
+> order matching across 5 tickers, pre-trade risk controls (position limits, per-ticker
+> notional exposure, spread protection), crash recovery via append-only NDJSON event log and
+> periodic snapshots, idempotent order submission with 24h TTL persisted to the event log,
+> per-ticker consumer sharding for concurrent matching, real-time WebSocket streaming
+> (book updates, trades, order status), and Prometheus metrics (p99 latency, orders/sec,
+> error rates). 215 tests including property-based invariants, failure injection, and full
+> restart simulation. Achieved ~1,025 orders/sec on a single event loop with p99 latency
+> of 19.58 ms (live uvicorn, Apple Silicon, Python 3.13)."
 
 ---
 
